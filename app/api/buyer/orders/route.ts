@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       if (profile) buyerProfileId = profile.id;
     }
 
-    if (!buyerProfileId && mockName !== "Bambang Hartono") {
+    if (!buyerProfileId && mockName && mockName !== "Bambang Hartono") {
       const { data: anyBuyer } = await adminClient
         .from("buyer_profiles")
         .select("profile_id")
@@ -122,7 +122,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: Create buyer order
+// POST: Create buyer order & decrement product stock
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -136,12 +136,17 @@ export async function POST(request: Request) {
     const cookieStore = cookies();
     const mockName = cookieStore.get("fishlink_mock_name")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_name")!.value) : "Restoran Mitra";
     const mockPhone = cookieStore.get("fishlink_mock_phone")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_phone")!.value) : "";
-    const mockBusiness = cookieStore.get("fishlink_mock_business")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_business")!.value) : "Restoran Seafood";
+    const mockBusiness = cookieStore.get("fishlink_mock_business")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_business")!.value) : "Restoran Seafood Bahari";
+
+    // Track in-memory mock state as well
+    const { addMockOrder, decrementMockStock } = await import("@/lib/mock-orders");
+    const { SEED_PRODUCTS, SEED_SUPPLIERS } = await import("@/lib/supabase/seed-data");
 
     let buyerProfileId: string | null = null;
+    let createdOrderId: string | null = null;
 
     if (adminClient) {
-      // Find buyer profile
+      // Find or create buyer profile
       if (mockPhone) {
         const cleanPhone = mockPhone.replace(/\D/g, "");
         const { data: profile } = await adminClient
@@ -179,7 +184,7 @@ export async function POST(request: Request) {
       }
 
       // Create Order in DB
-      const { data: order, error: orderError } = await adminClient
+      const { data: order } = await adminClient
         .from("orders")
         .insert({
           buyer_id: buyerProfileId,
@@ -191,29 +196,88 @@ export async function POST(request: Request) {
         .single();
 
       if (order?.id) {
-        // Insert order items
+        createdOrderId = order.id;
+
+        // Process items & update stock
         for (const item of items) {
-          let suppId = item.supplierId;
-          if (!suppId || suppId.length < 10) {
-            const { data: supp } = await adminClient.from("suppliers").select("id").limit(1).single();
-            if (supp) suppId = supp.id;
-          }
+          let resolvedSuppId = item.supplierId || "s1111111-1111-1111-1111-111111111111";
+          let resolvedProdId = item.productId || "p2222222-2222-2222-2222-222222222222";
 
-          let prodId = item.productId;
-          if (!prodId || prodId.length < 10) {
-            const { data: prod } = await adminClient.from("products").select("id").limit(1).single();
-            if (prod) prodId = prod.id;
-          }
+          // Ensure Supplier exists in DB (to prevent FK error)
+          const { data: suppCheck } = await adminClient
+            .from("suppliers")
+            .select("id")
+            .eq("id", resolvedSuppId)
+            .maybeSingle();
 
-          if (suppId && prodId) {
-            await adminClient.from("order_items").insert({
-              order_id: order.id,
-              product_id: prodId,
-              supplier_id: suppId,
-              quantity_kg: Number(item.quantityKg),
-              price_per_kg_at_order: Number(item.pricePerKg),
+          if (!suppCheck) {
+            const seedSupp = Object.values(SEED_SUPPLIERS).find((s) => s.id === resolvedSuppId) || SEED_SUPPLIERS.pak_udung;
+            const profileId = seedSupp.profile_id || `u-supp-${Date.now()}`;
+
+            await adminClient.from("profiles").upsert({
+              id: profileId,
+              role: "supplier",
+              full_name: seedSupp.business_name,
+              phone: "081234567890",
+            });
+
+            await adminClient.from("suppliers").upsert({
+              id: resolvedSuppId,
+              profile_id: profileId,
+              supplier_type: seedSupp.supplier_type || "nelayan_perorangan",
+              business_name: item.supplierName || seedSupp.business_name,
+              address_label: seedSupp.address_label || "Purwokerto",
+              location: "POINT(109.2344 -7.4243)",
             });
           }
+
+          // Ensure Product exists in DB (to prevent FK error & enable stock update)
+          const { data: prodCheck } = await adminClient
+            .from("products")
+            .select("id, stock_kg")
+            .eq("id", resolvedProdId)
+            .maybeSingle();
+
+          let currentStock = 100;
+          if (prodCheck) {
+            currentStock = Number(prodCheck.stock_kg || 0);
+          } else {
+            const seedProd = SEED_PRODUCTS.find((p) => p.id === resolvedProdId);
+            initialStock: seedProd ? seedProd.stock_kg : 100;
+            currentStock = seedProd ? seedProd.stock_kg : 100;
+
+            await adminClient.from("products").upsert({
+              id: resolvedProdId,
+              supplier_id: resolvedSuppId,
+              fish_name: item.fishName || "Hasil Laut",
+              price_per_kg: Number(item.pricePerKg),
+              stock_kg: currentStock,
+              catch_or_harvest_date: new Date().toISOString().split("T")[0],
+              photo_url: item.photoUrl || "/fresh-fish.png",
+              is_active: true,
+            });
+          }
+
+          // DECREMENT STOCK IN DB
+          const deductQty = Number(item.quantityKg || 0);
+          const remainingStock = Math.max(0, currentStock - deductQty);
+
+          await adminClient
+            .from("products")
+            .update({ stock_kg: remainingStock })
+            .eq("id", resolvedProdId);
+
+          // Insert order_items
+          await adminClient.from("order_items").insert({
+            order_id: order.id,
+            product_id: resolvedProdId,
+            supplier_id: resolvedSuppId,
+            quantity_kg: Number(item.quantityKg),
+            price_per_kg_at_order: Number(item.pricePerKg),
+          });
+
+          // Sync in-memory mock stock & order
+          decrementMockStock(item.productId, item.quantityKg);
         }
 
         // Insert payment
@@ -232,17 +296,46 @@ export async function POST(request: Request) {
           location_label: locationLabel || "Hub Purwokerto / Pesisir Asal",
           temperature_c: -2.5,
         });
-
-        return NextResponse.json({
-          success: true,
-          orderId: order.id,
-        });
       }
     }
 
-    // Fallback order ID
-    const fallbackId = `o${Date.now().toString(36)}`;
-    return NextResponse.json({ success: true, orderId: fallbackId });
+    // Fallback if no DB or as sync store
+    const finalOrderId = createdOrderId || `o${Date.now().toString(36)}`;
+
+    // Always populate mock store for demo / offline / supplier view
+    for (const item of items) {
+      const suppId = item.supplierId || "s1111111-1111-1111-1111-111111111111";
+      decrementMockStock(item.productId, item.quantityKg);
+
+      addMockOrder({
+        id: finalOrderId,
+        buyer_id: buyerProfileId || "u-buyer-demo",
+        buyerName: mockBusiness || mockName,
+        fishName: item.fishName || "Hasil Laut Segar",
+        quantityKg: Number(item.quantityKg),
+        subtotal: Number(item.pricePerKg) * Number(item.quantityKg),
+        status: "diproses_supplier",
+        dateLabel: "Baru saja",
+        delivery_schedule: deliveryDate || new Date().toISOString().split("T")[0],
+        created_at: new Date().toISOString(),
+        supplier_id: suppId,
+        supplierName: item.supplierName || "Mitra Supplier",
+        items: items.map((it: any) => ({
+          order_id: finalOrderId,
+          product_id: it.productId,
+          supplier_id: it.supplierId || suppId,
+          quantity_kg: Number(it.quantityKg),
+          price_per_kg_at_order: Number(it.pricePerKg),
+          fish_name: it.fishName,
+          buyer_name: mockBusiness || mockName,
+        })),
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      orderId: finalOrderId,
+    });
   } catch (err: any) {
     console.error("POST /api/buyer/orders error:", err);
     return NextResponse.json({ success: false, error: "Gagal memproses pesanan" }, { status: 500 });

@@ -40,36 +40,11 @@ export async function GET(request: Request) {
     const mockName = cookieStore.get("fishlink_mock_name")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_name")!.value) : "";
     const mockPhone = cookieStore.get("fishlink_mock_phone")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_phone")!.value) : "";
 
-    if (!adminClient) {
-      if (mockName === "Pak Udung" || !mockName) {
-        return NextResponse.json({ success: true, orders: SEED_SUPPLIER_ORDERS });
-      }
-      return NextResponse.json({ success: true, orders: [] });
-    }
+    const { getMockOrders } = await import("@/lib/mock-orders");
 
-    if (mockName === "Pak Udung") {
-      // Return seed orders + any real orders
-      const { data: dbItems } = await adminClient
-        .from("order_items")
-        .select("*, orders(*, buyer_profiles(*)), products(*)")
-        .order("created_at", { ascending: false });
-
-      const mapped = (dbItems || []).map((it: any) => ({
-        id: it.order_id || it.id,
-        buyerName: it.orders?.buyer_profiles?.business_name || "Mitra Restoran B2B",
-        fishName: it.products?.fish_name || "Hasil Laut Segar",
-        quantityKg: Number(it.quantity_kg),
-        subtotal: Number(it.price_per_kg_at_order) * Number(it.quantity_kg),
-        status: it.orders?.status || "diproses_supplier",
-        dateLabel: "Baru saja",
-      }));
-
-      return NextResponse.json({ success: true, orders: [...mapped, ...SEED_SUPPLIER_ORDERS] });
-    }
-
-    // Resolve supplier ID
+    // Resolve supplier ID if possible
     let supplierId: string | null = null;
-    if (mockPhone) {
+    if (adminClient && mockPhone) {
       const cleanPhone = mockPhone.replace(/\D/g, "");
       const { data: profile } = await adminClient
         .from("profiles")
@@ -87,7 +62,7 @@ export async function GET(request: Request) {
       }
     }
 
-    if (!supplierId) {
+    if (!supplierId && adminClient && mockName && mockName !== "Pak Udung") {
       const { data: suppByName } = await adminClient
         .from("suppliers")
         .select("id")
@@ -96,29 +71,65 @@ export async function GET(request: Request) {
       if (suppByName) supplierId = suppByName.id;
     }
 
-    if (supplierId) {
-      const { data: items } = await adminClient
+    let dbMapped: any[] = [];
+
+    if (adminClient) {
+      let query = adminClient
         .from("order_items")
         .select("*, orders(*, buyer_profiles(*)), products(*)")
-        .eq("supplier_id", supplierId);
+        .order("created_at", { ascending: false });
 
-      const mapped = (items || []).map((it: any) => ({
-        id: it.order_id || it.id,
-        buyerName: it.orders?.buyer_profiles?.business_name || "Mitra Pembeli",
-        fishName: it.products?.fish_name || "Hasil Laut Segar",
-        quantityKg: Number(it.quantity_kg),
-        subtotal: Number(it.price_per_kg_at_order) * Number(it.quantity_kg),
-        status: it.orders?.status || "diproses_supplier",
-        dateLabel: "Terbaru",
-      }));
+      if (supplierId) {
+        query = query.eq("supplier_id", supplierId);
+      }
 
-      return NextResponse.json({ success: true, orders: mapped });
+      const { data: dbItems } = await query;
+
+      if (dbItems && dbItems.length > 0) {
+        dbMapped = dbItems.map((it: any) => ({
+          id: it.order_id || it.id,
+          buyerName: it.orders?.buyer_profiles?.business_name || "Mitra Restoran B2B",
+          fishName: it.products?.fish_name || "Hasil Laut Segar",
+          quantityKg: Number(it.quantity_kg),
+          subtotal: Number(it.price_per_kg_at_order) * Number(it.quantity_kg),
+          status: it.orders?.status || "diproses_supplier",
+          dateLabel: "Baru saja",
+        }));
+      }
     }
 
-    return NextResponse.json({ success: true, orders: [] });
+    // Fetch mock orders created in current app session
+    const mockOrders = getMockOrders(supplierId || undefined);
+
+    // Merge and deduplicate by order ID
+    const mergedMap = new Map<string, any>();
+
+    // Add mock orders first (most recent)
+    for (const mo of mockOrders) {
+      mergedMap.set(mo.id, mo);
+    }
+
+    // Add DB mapped orders
+    for (const dbo of dbMapped) {
+      if (!mergedMap.has(dbo.id)) {
+        mergedMap.set(dbo.id, dbo);
+      }
+    }
+
+    // Add SEED orders for Pak Udung or default view if sparse
+    if (!mockName || mockName === "Pak Udung") {
+      for (const so of SEED_SUPPLIER_ORDERS) {
+        if (!mergedMap.has(so.id)) {
+          mergedMap.set(so.id, so);
+        }
+      }
+    }
+
+    const allOrders = Array.from(mergedMap.values());
+    return NextResponse.json({ success: true, orders: allOrders });
   } catch (err: any) {
     console.error("GET /api/supplier/orders error:", err);
-    return NextResponse.json({ success: true, orders: [] });
+    return NextResponse.json({ success: true, orders: SEED_SUPPLIER_ORDERS });
   }
 }
 

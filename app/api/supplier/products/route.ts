@@ -32,10 +32,18 @@ export async function GET(request: Request) {
     const mockName = cookieStore.get("fishlink_mock_name")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_name")!.value) : "";
     const mockPhone = cookieStore.get("fishlink_mock_phone")?.value ? decodeURIComponent(cookieStore.get("fishlink_mock_phone")!.value) : "";
 
+    const { getAdjustedStock } = await import("@/lib/mock-orders");
+
+    const applyStockAdjustments = (prods: any[]) =>
+      prods.map((p) => ({
+        ...p,
+        stock_kg: getAdjustedStock(p.id, Number(p.stock_kg || 0)),
+      }));
+
     if (!adminClient) {
       // Fallback
       if (filterAll || mockName === "Pak Udung" || !mockName) {
-        return NextResponse.json({ success: true, products: SEED_PRODUCTS });
+        return NextResponse.json({ success: true, products: applyStockAdjustments(SEED_PRODUCTS) });
       }
       return NextResponse.json({ success: true, products: [] });
     }
@@ -60,21 +68,25 @@ export async function GET(request: Request) {
         },
       }));
 
-      // Deduplicate
-      const all = [...mappedDb, ...SEED_PRODUCTS];
-      return NextResponse.json({ success: true, products: all });
+      // Deduplicate DB & Seed products
+      const dbIds = new Set(mappedDb.map((p: any) => p.id));
+      const seedFiltered = SEED_PRODUCTS.filter((s) => !dbIds.has(s.id));
+      const all = [...mappedDb, ...seedFiltered];
+      return NextResponse.json({ success: true, products: applyStockAdjustments(all) });
     }
 
-    // If specific supplier
-    if (mockName === "Pak Udung") {
+    // If specific supplier (Pak Udung or custom)
+    if (mockName === "Pak Udung" || !mockName) {
       const { data: dbProducts } = await adminClient
         .from("products")
         .select("*, suppliers(*)")
         .order("created_at", { ascending: false });
 
       const seedPakUdung = SEED_PRODUCTS.filter((p) => p.supplier_id === "s1111111-1111-1111-1111-111111111111");
-      const combined = [...(dbProducts || []), ...seedPakUdung];
-      return NextResponse.json({ success: true, products: combined });
+      const dbIds = new Set((dbProducts || []).map((p: any) => p.id));
+      const seedFiltered = seedPakUdung.filter((s) => !dbIds.has(s.id));
+      const combined = [...(dbProducts || []), ...seedFiltered];
+      return NextResponse.json({ success: true, products: applyStockAdjustments(combined) });
     }
 
     // Find supplier row by phone or profile
@@ -114,10 +126,10 @@ export async function GET(request: Request) {
         .eq("supplier_id", supplierId)
         .order("created_at", { ascending: false });
 
-      return NextResponse.json({ success: true, products: myProducts || [] });
+      return NextResponse.json({ success: true, products: applyStockAdjustments(myProducts || []) });
     }
 
-    return NextResponse.json({ success: true, products: [] });
+    return NextResponse.json({ success: true, products: applyStockAdjustments(SEED_PRODUCTS) });
   } catch (err: any) {
     console.error("GET /api/supplier/products error:", err);
     return NextResponse.json({ success: true, products: [] });

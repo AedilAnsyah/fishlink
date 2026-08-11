@@ -87,16 +87,20 @@ export default function DetailProdukPage() {
   const totalPrice = Number(product.price_per_kg) * quantityKg;
 
   const handleAddToCart = () => {
-    // Save to localStorage simple cart
+    const suppId = product.supplier_id || product.suppliers?.id || "s1111111-1111-1111-1111-111111111111";
     const cartItem = {
       productId: product.id,
       fishName: product.fish_name,
-      pricePerKg: product.price_per_kg,
+      pricePerKg: Number(product.price_per_kg),
       quantityKg,
-      supplierName: product.suppliers?.business_name,
-      photoUrl: product.photo_url,
+      supplierId: suppId,
+      supplierName: product.suppliers?.business_name || "Mitra Supplier",
+      photoUrl: product.photo_url || "/fresh-fish.png",
     };
-    localStorage.setItem("fishlink_cart", JSON.stringify([cartItem]));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("fishlink_cart_v1", JSON.stringify([cartItem]));
+      localStorage.setItem("fishlink_cart", JSON.stringify([cartItem]));
+    }
     router.push("/checkout");
   };
 

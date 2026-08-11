@@ -10,9 +10,11 @@ export interface ProductWithSupplier extends Product {
 
 /**
  * Fetch all active products from Supabase database.
- * Merges real products with default seed products.
+ * Merges real products with default seed products and applies mock stock adjustments.
  */
 export async function fetchProducts(): Promise<ProductWithSupplier[]> {
+  const { getAdjustedStock } = await import("@/lib/mock-orders");
+
   try {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -22,11 +24,15 @@ export async function fetchProducts(): Promise<ProductWithSupplier[]> {
       .order("created_at", { ascending: false });
 
     if (error || !data || data.length === 0) {
-      return SEED_PRODUCTS;
+      return SEED_PRODUCTS.map((sp) => ({
+        ...sp,
+        stock_kg: getAdjustedStock(sp.id, sp.stock_kg),
+      }));
     }
 
     const realProducts: ProductWithSupplier[] = data.map((item, idx) => ({
       ...item,
+      stock_kg: getAdjustedStock(item.id, Number(item.stock_kg || 0)),
       suppliers: item.suppliers || {
         id: item.supplier_id,
         business_name: "Mitra Nelayan Lokal",
@@ -41,11 +47,17 @@ export async function fetchProducts(): Promise<ProductWithSupplier[]> {
     // Filter out seed duplicates if real products exist
     const seedFiltered = SEED_PRODUCTS.filter(
       (s) => !realProducts.some((r) => r.id === s.id)
-    );
+    ).map((sp) => ({
+      ...sp,
+      stock_kg: getAdjustedStock(sp.id, sp.stock_kg),
+    }));
 
     return [...realProducts, ...seedFiltered];
   } catch {
-    return SEED_PRODUCTS;
+    return SEED_PRODUCTS.map((sp) => ({
+      ...sp,
+      stock_kg: getAdjustedStock(sp.id, sp.stock_kg),
+    }));
   }
 }
 
@@ -55,6 +67,8 @@ export async function fetchProducts(): Promise<ProductWithSupplier[]> {
 export async function fetchProductById(
   id: string
 ): Promise<ProductWithSupplier | null> {
+  const { getAdjustedStock } = await import("@/lib/mock-orders");
+
   try {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -64,12 +78,16 @@ export async function fetchProductById(
       .single();
 
     if (error || !data) {
-      const seed = SEED_PRODUCTS.find((p) => p.id === id);
-      return seed || SEED_PRODUCTS[0];
+      const seed = SEED_PRODUCTS.find((p) => p.id === id) || SEED_PRODUCTS[0];
+      return {
+        ...seed,
+        stock_kg: getAdjustedStock(seed.id, seed.stock_kg),
+      };
     }
 
     return {
       ...data,
+      stock_kg: getAdjustedStock(data.id, Number(data.stock_kg || 0)),
       suppliers: data.suppliers || {
         id: data.supplier_id,
         business_name: "Mitra Nelayan Lokal",
@@ -81,7 +99,10 @@ export async function fetchProductById(
       distance_km: 12,
     } as ProductWithSupplier;
   } catch {
-    const seed = SEED_PRODUCTS.find((p) => p.id === id);
-    return seed || SEED_PRODUCTS[0];
+    const seed = SEED_PRODUCTS.find((p) => p.id === id) || SEED_PRODUCTS[0];
+    return {
+      ...seed,
+      stock_kg: getAdjustedStock(seed.id, seed.stock_kg),
+    };
   }
 }
