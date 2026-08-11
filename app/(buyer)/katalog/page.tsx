@@ -236,7 +236,7 @@ export default function KatalogPage() {
                   onChange={(e) => setSortBy(e.target.value as any)}
                   className="w-full px-3 h-10 rounded-lg border-2 border-ocean-900 bg-sky-50 text-ocean-900 font-bold focus:border-ocean-900 outline-none"
                 >
-                  <option value="terdekat_tersegar">Terdekat & Tersegar (PostGIS Default)</option>
+                  <option value="terdekat_tersegar">Terdekat & Tersegar</option>
                   <option value="termurah">Harga: Termurah</option>
                   <option value="termahal">Harga: Tertinggi</option>
                   <option value="stok">Stok Terbanyak</option>
@@ -254,7 +254,7 @@ export default function KatalogPage() {
             {sortBy === "terdekat_tersegar" && (
               <span className="inline-flex items-center gap-1 font-semibold text-ocean-900 bg-sky-200/60 px-2.5 py-0.5 rounded-full border border-sky-400/30">
                 <Sparkles className="w-3.5 h-3.5 text-ocean-900" />
-                Diurutkan dengan PostGIS matching lokasi & skor kesegaran
+                Diurutkan berdasarkan lokasi terdekat & skor kesegaran
               </span>
             )}
           </div>
