@@ -30,6 +30,35 @@ export function saveCartItems(items: CartItem[]): void {
   localStorage.setItem("fishlink_cart", JSON.stringify(items));
 }
 
+export function addToCart(newItem: CartItem): CartItem[] {
+  const currentItems = getCartItems();
+  const existingIdx = currentItems.findIndex((it) => it.productId === newItem.productId);
+
+  let updated: CartItem[];
+  if (existingIdx >= 0) {
+    updated = currentItems.map((item, idx) => {
+      if (idx === existingIdx) {
+        return {
+          ...item,
+          quantityKg: item.quantityKg + newItem.quantityKg,
+          pricePerKg: newItem.pricePerKg,
+        };
+      }
+      return item;
+    });
+  } else {
+    updated = [...currentItems, newItem];
+  }
+
+  saveCartItems(updated);
+  return updated;
+}
+
+export function getCartCount(): number {
+  const items = getCartItems();
+  return items.length;
+}
+
 export function clearCart(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(CART_KEY);

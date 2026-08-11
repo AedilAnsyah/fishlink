@@ -106,6 +106,14 @@ export function Navbar() {
     router.push("/login");
   };
 
+  const [cartCount, setCartCount] = useState<number>(0);
+
+  useEffect(() => {
+    import("@/lib/cart").then(({ getCartCount }) => {
+      setCartCount(getCartCount());
+    });
+  }, [pathname]);
+
   const publicNavLinks = [
     { href: "/", label: "Beranda" },
     { href: "/tentang", label: "Tentang Kami" },
@@ -117,7 +125,7 @@ export function Navbar() {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/katalog", label: "Katalog Ikan" },
     { href: "/custom-order", label: "Custom Order" },
-    { href: "/keranjang", label: "Keranjang" },
+    { href: "/keranjang", label: "Keranjang", badge: cartCount },
     { href: "/langganan", label: "Paket Langganan" },
   ];
 
@@ -146,19 +154,24 @@ export function Navbar() {
 
           {/* Desktop Nav Links */}
           <nav className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => {
+            {navLinks.map((link: any) => {
               const isActive = pathname === link.href;
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`text-sm font-medium transition-colors ${
+                  className={`text-sm font-medium transition-colors relative flex items-center gap-1.5 ${
                     isActive
                       ? "text-ocean-900 font-bold border-b-2 border-ocean-900 py-5"
                       : "text-ink-700 hover:text-ocean-900"
                   }`}
                 >
-                  {link.label}
+                  <span>{link.label}</span>
+                  {Boolean(link.badge) && (
+                    <span className="bg-ocean-900 text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full tabular-nums">
+                      {link.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

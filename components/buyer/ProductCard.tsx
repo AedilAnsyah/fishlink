@@ -23,6 +23,30 @@ export function ProductCard({ product }: ProductCardProps) {
   const supplierTypeLabel =
     supplierTypeLabels[product.suppliers?.supplier_type] || "Mitra Supplier";
 
+  const [added, setAdded] = useState(false);
+
+  const handleQuickAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const suppId = product.supplier_id || product.suppliers?.id || "s1111111-1111-1111-1111-111111111111";
+    const cartItem = {
+      productId: product.id,
+      fishName: product.fish_name,
+      pricePerKg: Number(product.price_per_kg),
+      quantityKg: Math.min(10, Number(product.stock_kg || 10)),
+      supplierId: suppId,
+      supplierName: product.suppliers?.business_name || "Mitra Supplier",
+      photoUrl: product.photo_url || "/fresh-fish.png",
+    };
+
+    import("@/lib/cart").then(({ addToCart }) => {
+      addToCart(cartItem);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2000);
+    });
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-ink-200 shadow-xs overflow-hidden flex flex-col justify-between hover:border-ocean-900 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
       <div>
@@ -114,14 +138,28 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
       </div>
 
-      {/* Action Footer */}
-      <div className="p-4 pt-0">
+      {/* Action Footer: Add to Cart + View Detail */}
+      <div className="p-4 pt-0 grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          onClick={handleQuickAddToCart}
+          variant={added ? "default" : "outline"}
+          className={`w-full font-bold text-xs h-10 gap-1.5 transition-all duration-200 ${
+            added
+              ? "bg-success-600 text-white border-success-600"
+              : "border-ink-200 text-ink-900 hover:bg-sky-50"
+          }`}
+        >
+          <ShoppingBag className="w-3.5 h-3.5" />
+          <span>{added ? "Tersimpan! ✓" : "+ Keranjang"}</span>
+        </Button>
+
         <Link href={`/katalog/${product.id}`} className="block">
           <Button
-            variant="outline"
-            className="w-full border-ocean-900 text-ocean-900 hover:bg-ocean-900 hover:text-white font-bold text-xs gap-1.5 h-10 transition-all duration-200"
+            variant="default"
+            className="w-full bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-xs gap-1 h-10 transition-all duration-200"
           >
-            <span>Lihat Detail & Pesan</span>
+            <span>Detail</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </Button>
         </Link>

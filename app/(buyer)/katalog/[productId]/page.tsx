@@ -33,6 +33,7 @@ export default function DetailProdukPage() {
   const [product, setProduct] = useState<ProductWithSupplier | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantityKg, setQuantityKg] = useState<number>(10);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     async function loadProduct() {
@@ -44,6 +45,32 @@ export default function DetailProdukPage() {
     }
     loadProduct();
   }, [productId]);
+
+  const getCartItem = () => {
+    const suppId = product?.supplier_id || product?.suppliers?.id || "s1111111-1111-1111-1111-111111111111";
+    return {
+      productId: product?.id || productId,
+      fishName: product?.fish_name || "Hasil Laut",
+      pricePerKg: Number(product?.price_per_kg || 0),
+      quantityKg,
+      supplierId: suppId,
+      supplierName: product?.suppliers?.business_name || "Mitra Supplier",
+      photoUrl: product?.photo_url || "/fresh-fish.png",
+    };
+  };
+
+  const handleAddToCartOnly = async () => {
+    const { addToCart } = await import("@/lib/cart");
+    addToCart(getCartItem());
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4000);
+  };
+
+  const handleDirectCheckout = async () => {
+    const { addToCart } = await import("@/lib/cart");
+    addToCart(getCartItem());
+    router.push("/checkout");
+  };
 
   if (loading) {
     return (
@@ -85,24 +112,6 @@ export default function DetailProdukPage() {
   };
 
   const totalPrice = Number(product.price_per_kg) * quantityKg;
-
-  const handleAddToCart = () => {
-    const suppId = product.supplier_id || product.suppliers?.id || "s1111111-1111-1111-1111-111111111111";
-    const cartItem = {
-      productId: product.id,
-      fishName: product.fish_name,
-      pricePerKg: Number(product.price_per_kg),
-      quantityKg,
-      supplierId: suppId,
-      supplierName: product.suppliers?.business_name || "Mitra Supplier",
-      photoUrl: product.photo_url || "/fresh-fish.png",
-    };
-    if (typeof window !== "undefined") {
-      localStorage.setItem("fishlink_cart_v1", JSON.stringify([cartItem]));
-      localStorage.setItem("fishlink_cart", JSON.stringify([cartItem]));
-    }
-    router.push("/checkout");
-  };
 
   return (
     <div className="min-h-screen bg-off-white flex flex-col font-sans">
@@ -307,20 +316,46 @@ export default function DetailProdukPage() {
                   </span>
                 </div>
 
-                {/* Primary Action Button */}
-                <Button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="w-full h-12 bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-base shadow-sm gap-2"
-                >
-                  <ShoppingBag className="w-5 h-5" /> Pesan Sekarang (Lanjut ke Checkout)
-                </Button>
+                {/* Toast Notification Banner when added to cart */}
+                {showToast && (
+                  <div className="p-3 bg-success-100 border-2 border-success-600 rounded-xl text-success-600 text-xs font-bold flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0" />
+                      <span>{quantityKg} kg {product.fish_name} masuk keranjang!</span>
+                    </div>
+                    <Link href="/keranjang">
+                      <Button size="sm" className="bg-success-600 text-white font-extrabold text-[11px] h-7 px-3">
+                        Lihat Keranjang
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+
+                {/* Primary Action Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <Button
+                    type="button"
+                    onClick={handleAddToCartOnly}
+                    variant="outline"
+                    className="w-full h-12 border-ocean-900 text-ocean-900 hover:bg-sky-50 font-extrabold text-sm gap-2 rounded-xl"
+                  >
+                    <Plus className="w-4 h-4" /> + Masukkan ke Keranjang
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={handleDirectCheckout}
+                    className="w-full h-12 bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-sm shadow-sm gap-2 rounded-xl"
+                  >
+                    <ShoppingBag className="w-4 h-4 text-sky-400" /> Pesan Sekarang (Checkout)
+                  </Button>
+                </div>
 
                 <div className="pt-1 flex gap-2">
                   <Link href="/custom-order" className="flex-1">
                     <Button
                       variant="outline"
-                      className="w-full h-10 border-ink-200 text-ink-900 hover:bg-sky-50 text-xs font-semibold"
+                      className="w-full h-10 border-ink-200 text-ink-900 hover:bg-sky-50 text-xs font-semibold rounded-xl"
                     >
                       Request Spesifikasi Khusus
                     </Button>
@@ -335,7 +370,7 @@ export default function DetailProdukPage() {
                   >
                     <Button
                       variant="outline"
-                      className="w-full h-10 border-success-600 text-success-600 hover:bg-success-100 text-xs font-semibold gap-1.5"
+                      className="w-full h-10 border-success-600 text-success-600 hover:bg-success-100 text-xs font-semibold gap-1.5 rounded-xl"
                     >
                       <MessageCircle className="w-4 h-4" /> Tanya via WA
                     </Button>
