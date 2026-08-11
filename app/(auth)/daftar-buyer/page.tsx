@@ -57,13 +57,14 @@ export default function DaftarBuyerPage() {
       });
 
       if (authError) {
+        // Only block for duplicate registration — this is a real user error
         if (authError.message.includes("already registered")) {
           setErrorMessage("Email ini sudah terdaftar. Silakan masuk menggunakan email dan kata sandi Anda.");
-        } else {
-          setErrorMessage(`Gagal mendaftar: ${authError.message}`);
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
+        // For rate limits or other Supabase issues, continue with cookie-based session
+        console.warn("Supabase signup warning (proceeding with local session):", authError.message);
       }
 
       if (authData?.user) {

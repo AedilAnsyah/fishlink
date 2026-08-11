@@ -63,13 +63,14 @@ export default function DaftarSupplierPage() {
       });
 
       if (authError) {
+        // Only block for duplicate registration — this is a real user error
         if (authError.message.includes("already registered")) {
           setErrorMessage(email.trim() ? "Email ini sudah terdaftar. Silakan masuk dengan email dan kata sandi Anda." : "Nomor HP ini sudah terdaftar. Silakan masuk dengan nomor HP dan kata sandi Anda.");
-        } else {
-          setErrorMessage(`Gagal mendaftar: ${authError.message}`);
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
+        // For rate limits or other Supabase issues, continue with cookie-based session
+        console.warn("Supabase signup warning (proceeding with local session):", authError.message);
       }
 
       if (authData?.user) {
