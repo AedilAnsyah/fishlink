@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Plus,
 } from "lucide-react";
+import { LocationSelector } from "@/components/shared/LocationSelector";
 import { Button } from "@/components/ui/button";
 
 export default function KatalogPage() {
@@ -33,9 +34,21 @@ export default function KatalogPage() {
     "terdekat_tersegar"
   );
 
-  const [locationLabel, setLocationLabel] = useState("Senopati, Jakarta Selatan (Restoran Seafood Bahari)");
+  const [locationLabel, setLocationLabel] = useState("Purwokerto, Jawa Tengah");
 
   useEffect(() => {
+    const cookies = document.cookie.split(";").reduce((acc, c) => {
+      const [k, v] = c.trim().split("=");
+      if (k && v) acc[k] = decodeURIComponent(v);
+      return acc;
+    }, {} as Record<string, string>);
+
+    if (cookies.fishlink_user_location) {
+      setLocationLabel(cookies.fishlink_user_location);
+    } else if (cookies.fishlink_mock_business) {
+      setLocationLabel(cookies.fishlink_mock_business);
+    }
+
     async function loadData() {
       setLoading(true);
       const data = await fetchProducts();
@@ -44,6 +57,11 @@ export default function KatalogPage() {
     }
     loadData();
   }, []);
+
+  const handleLocationChange = (newLabel: string) => {
+    setLocationLabel(newLabel);
+    document.cookie = `fishlink_user_location=${encodeURIComponent(newLabel)}; path=/; max-age=86400; SameSite=Lax`;
+  };
 
   // Filter & Sort Logic
   const filteredProducts = products
@@ -94,19 +112,22 @@ export default function KatalogPage() {
 
       {/* Top Banner / Location Bar */}
       <section className="bg-ocean-900 text-white py-4 border-b border-ocean-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-sky-400 text-ink-900 flex items-center justify-center font-bold">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="w-8 h-8 rounded-lg bg-sky-400 text-ink-900 flex items-center justify-center font-bold shrink-0">
               <MapPin className="w-4 h-4" />
             </div>
-            <div>
+            <div className="flex-1 min-w-[240px]">
               <span className="text-sky-200 block text-[10px]">Lokasi Acuan Buyer Saat Ini:</span>
-              <strong className="text-sm font-semibold">{locationLabel}</strong>
+              <LocationSelector
+                locationLabel={locationLabel}
+                onLocationChange={handleLocationChange}
+              />
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-sky-200">Tidak menemukan jenis ikan yang dicari?</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-sky-200 hidden sm:inline">Tidak menemukan jenis ikan yang dicari?</span>
             <Link href="/custom-order">
               <Button size="sm" className="bg-sky-400 hover:bg-sky-200 text-ink-900 font-bold text-xs gap-1.5">
                 <Plus className="w-3.5 h-3.5" /> Request Custom Order

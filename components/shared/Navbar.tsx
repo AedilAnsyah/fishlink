@@ -38,8 +38,8 @@ export function Navbar() {
 
       if (cookies.fishlink_mock_role === "buyer" || cookies.fishlink_mock_role === "supplier") {
         setRole(cookies.fishlink_mock_role as "buyer" | "supplier");
-        setUserName(cookies.fishlink_mock_name || (cookies.fishlink_mock_role === "supplier" ? "Pak Udung" : "Bambang Hartono"));
-        setUserBusiness(cookies.fishlink_mock_business || (cookies.fishlink_mock_role === "supplier" ? "Tangkapan Pak Udung" : "Restoran Seafood Bahari"));
+        setUserName(cookies.fishlink_mock_name || (cookies.fishlink_mock_role === "supplier" ? "Mitra Supplier" : "Mitra Buyer"));
+        setUserBusiness(cookies.fishlink_mock_business || (cookies.fishlink_mock_role === "supplier" ? "Depo Supplier Hasil Laut" : "Usaha Pembeli B2B"));
         return;
       }
 

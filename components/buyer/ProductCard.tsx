@@ -87,7 +87,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {/* Season Tag if present */}
           {product.season_tag && (
             <span className="inline-block text-[11px] font-semibold text-ocean-900 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-              🏷️ {product.season_tag}
+              {product.season_tag}
             </span>
           )}
 
