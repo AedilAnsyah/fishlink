@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LocationSelector } from "@/components/shared/LocationSelector";
 import { SupplierType } from "@/types/database.types";
 
-import { createClient } from "@/lib/supabase/client";
+import { registerAccount } from "@/lib/auth";
 
 export default function DaftarSupplierPage() {
   const router = useRouter();
@@ -46,63 +46,31 @@ export default function DaftarSupplierPage() {
     setLoading(true);
 
     const effectiveBusiness = businessName || `Tangkapan ${fullName}`;
-    // Jika user mengisi email, gunakan email itu. Jika tidak, auto-generate dari nomor HP.
-    const authEmail = email.trim() || `${phone.replace(/\D/g, "")}@supplier.fishlink.id`;
 
     try {
-      const supabase = createClient();
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: authEmail,
+      const res = await registerAccount({
+        email: email.trim(),
+        phone: phone.trim(),
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: "supplier",
-          },
-        },
+        fullName: fullName.trim(),
+        businessName: effectiveBusiness.trim(),
+        role: "supplier",
+        location: locationLabel.trim(),
+        supplierType,
       });
 
-      if (authError) {
-        // Only block for duplicate registration — this is a real user error
-        if (authError.message.includes("already registered")) {
-          setErrorMessage(email.trim() ? "Email ini sudah terdaftar. Silakan masuk dengan email dan kata sandi Anda." : "Nomor HP ini sudah terdaftar. Silakan masuk dengan nomor HP dan kata sandi Anda.");
-          setLoading(false);
-          return;
-        }
-        // For rate limits or other Supabase issues, continue with cookie-based session
-        console.warn("Supabase signup warning (proceeding with local session):", authError.message);
+      if (!res.success) {
+        setErrorMessage(res.error || "Gagal mendaftar. Silakan coba lagi.");
+        setLoading(false);
+        return;
       }
 
-      if (authData?.user) {
-        await supabase.from("profiles").insert({
-          id: authData.user.id,
-          role: "supplier",
-          full_name: fullName,
-          phone: phone,
-        });
-
-        await supabase.from("suppliers").insert({
-          profile_id: authData.user.id,
-          supplier_type: supplierType,
-          business_name: effectiveBusiness,
-          address_label: locationLabel,
-          location: `POINT(109.2344 -7.4243)`,
-        });
-      }
+      setLoading(false);
+      router.push("/supplier/beranda");
     } catch {
-      // Fallback — continue with cookie-based auth
+      setErrorMessage("Terjadi kesalahan saat mendaftar. Silakan coba lagi.");
+      setLoading(false);
     }
-
-    // Set full client cookies for immediate session
-    document.cookie = `fishlink_mock_role=supplier; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_business=${encodeURIComponent(effectiveBusiness)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_location=${encodeURIComponent(locationLabel)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_phone=${encodeURIComponent(phone)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_supplier_type=${encodeURIComponent(supplierType)}; path=/; max-age=86400; SameSite=Lax`;
-
-    setLoading(false);
-    router.push("/supplier/beranda");
   };
 
   return (

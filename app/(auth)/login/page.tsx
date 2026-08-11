@@ -3,34 +3,9 @@
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Mail, Phone, ShieldCheck, Fish, Building2, Anchor, Eye, EyeOff } from "lucide-react";
+import { Lock, Mail, Phone, ShieldCheck, Fish, Building2, Anchor, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
-
-/* ──────────────────────────────────────────────────────────────
-   Test / Demo Accounts — masing-masing 1 akun per role
-   ────────────────────────────────────────────────────────────── */
-const TEST_ACCOUNTS = {
-  buyer: {
-    email: "buyer@fishlink.id",
-    password: "buyer123",
-    name: "Bambang Hartono",
-    business: "Restoran Seafood Bahari, Senopati",
-    location: "Senopati, Jakarta Selatan",
-    phone: "081298765432",
-    role: "buyer" as const,
-  },
-  supplier: {
-    email: "supplier@fishlink.id",
-    password: "supplier123",
-    name: "Pak Udung",
-    business: "Tangkapan Pak Udung",
-    location: "Depo Seafood Purwokerto, Jawa Tengah",
-    phone: "081234567890",
-    supplierType: "nelayan_perorangan",
-    role: "supplier" as const,
-  },
-};
+import { loginAccount } from "@/lib/auth";
 
 function LoginForm() {
   const router = useRouter();
@@ -43,15 +18,8 @@ function LoginForm() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Determine if identifier looks like an email or phone number
-  const isEmail = (str: string) => str.includes("@");
+  // Check if identifier looks like an email or phone number
   const isPhone = (str: string) => /^[0-9+\-\s]{8,}$/.test(str.replace(/\s/g, ""));
-
-  // Convert phone number to the auto-generated email format used by supplier registration
-  const phoneToEmail = (phone: string) => {
-    const digits = phone.replace(/\D/g, "");
-    return `${digits}@supplier.fishlink.id`;
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,118 +34,32 @@ function LoginForm() {
 
     setLoading(true);
 
-    // Check against test accounts first (by email)
-    const matchedAccount = Object.values(TEST_ACCOUNTS).find(
-      (acc) => acc.email === identifier.toLowerCase() && acc.password === password
-    );
+    try {
+      const result = await loginAccount(identifier, password);
 
-    if (matchedAccount) {
-      document.cookie = `fishlink_mock_role=${matchedAccount.role}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `fishlink_mock_name=${encodeURIComponent(matchedAccount.name)}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `fishlink_mock_business=${encodeURIComponent(matchedAccount.business)}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `fishlink_mock_location=${encodeURIComponent(matchedAccount.location)}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `fishlink_mock_phone=${encodeURIComponent(matchedAccount.phone)}; path=/; max-age=86400; SameSite=Lax`;
-      if ("supplierType" in matchedAccount) {
-        document.cookie = `fishlink_mock_supplier_type=${encodeURIComponent((matchedAccount as any).supplierType)}; path=/; max-age=86400; SameSite=Lax`;
+      if (!result.success || !result.user) {
+        setErrorMessage(
+          result.error || "Email/Nomor HP atau kata sandi salah. Silakan periksa kembali."
+        );
+        setLoading(false);
+        return;
       }
 
-      await new Promise((r) => setTimeout(r, 600));
+      // Small delay for smooth UX transition
+      await new Promise((r) => setTimeout(r, 400));
       setLoading(false);
 
       if (redirectPath) {
         router.push(redirectPath);
-      } else if (matchedAccount.role === "supplier") {
+      } else if (result.user.role === "supplier") {
         router.push("/supplier/beranda");
       } else {
         router.push("/dashboard");
       }
-      return;
-    }
-
-    // Try Supabase Auth
-    try {
-      const supabase = createClient();
-
-      // First attempt: use identifier as-is (email or phone-to-email)
-      let authEmail = identifier;
-      if (isPhone(identifier)) {
-        authEmail = phoneToEmail(identifier);
-      }
-
-      let { data, error } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password,
-      });
-
-      if (error) {
-        if (isPhone(identifier)) {
-          setErrorMessage("Nomor HP atau kata sandi salah. Pastikan Anda sudah terdaftar atau coba login dengan email.");
-        } else {
-          setErrorMessage("Email atau kata sandi salah. Silakan periksa kembali atau daftar akun baru.");
-        }
-        setLoading(false);
-        return;
-      }
-
-      if (data.user) {
-        // Fetch user profile to determine role and set proper cookies
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role, full_name, phone")
-          .eq("id", data.user.id)
-          .single();
-
-        const role = profile?.role || "buyer";
-        const fullName = profile?.full_name || data.user.user_metadata?.full_name || "Pengguna";
-        const phone = profile?.phone || "";
-
-        let businessName = "";
-        let locationLabel = "";
-        let supplierType = "";
-
-        if (role === "buyer") {
-          const { data: buyerProfile } = await supabase
-            .from("buyer_profiles")
-            .select("business_name, address")
-            .eq("profile_id", data.user.id)
-            .single();
-          businessName = buyerProfile?.business_name || "Usaha Pembeli";
-          locationLabel = buyerProfile?.address || "";
-        } else if (role === "supplier") {
-          const { data: supplierProfile } = await supabase
-            .from("suppliers")
-            .select("business_name, address_label, supplier_type")
-            .eq("profile_id", data.user.id)
-            .single();
-          businessName = supplierProfile?.business_name || `Mitra ${fullName}`;
-          locationLabel = supplierProfile?.address_label || "";
-          supplierType = supplierProfile?.supplier_type || "nelayan_perorangan";
-        }
-
-        // Set cookies for the app to recognize the logged-in user
-        document.cookie = `fishlink_mock_role=${role}; path=/; max-age=86400; SameSite=Lax`;
-        document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
-        document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
-        if (locationLabel) document.cookie = `fishlink_mock_location=${encodeURIComponent(locationLabel)}; path=/; max-age=86400; SameSite=Lax`;
-        if (phone) document.cookie = `fishlink_mock_phone=${encodeURIComponent(phone)}; path=/; max-age=86400; SameSite=Lax`;
-        if (supplierType) document.cookie = `fishlink_mock_supplier_type=${encodeURIComponent(supplierType)}; path=/; max-age=86400; SameSite=Lax`;
-
-        setLoading(false);
-
-        if (redirectPath) {
-          router.push(redirectPath);
-        } else if (role === "supplier") {
-          router.push("/supplier/beranda");
-        } else {
-          router.push("/dashboard");
-        }
-        return;
-      }
     } catch {
       setErrorMessage("Terjadi kesalahan saat masuk. Silakan coba lagi.");
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -185,14 +67,14 @@ function LoginForm() {
       {/* Login Form */}
       <form className="space-y-5" onSubmit={handleLogin}>
         {errorMessage && (
-          <div className="p-3 bg-danger-100 border border-danger-600/30 text-danger-600 rounded-lg text-xs font-medium">
+          <div className="p-3.5 bg-danger-100 border border-danger-600/30 text-danger-600 rounded-xl text-xs font-semibold">
             {errorMessage}
           </div>
         )}
 
         <div>
           <label className="block text-sm font-semibold text-ink-900 mb-1">
-            Email atau Nomor HP
+            Email atau Nomor HP <span className="text-danger-600">*</span>
           </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -208,6 +90,7 @@ function LoginForm() {
               onChange={(e) => setLoginIdentifier(e.target.value)}
               placeholder="contoh: resto@email.com atau 081234567890"
               className="block w-full pl-11 pr-4 py-2.5 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-sm outline-none"
+              required
             />
           </div>
           <p className="text-[11px] text-ink-400 mt-1">
@@ -217,7 +100,7 @@ function LoginForm() {
 
         <div>
           <label className="block text-sm font-semibold text-ink-900 mb-1">
-            Kata Sandi
+            Kata Sandi <span className="text-danger-600">*</span>
           </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -229,6 +112,7 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Masukkan kata sandi"
               className="block w-full pl-11 pr-12 py-2.5 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-sm outline-none"
+              required
             />
             <button
               type="button"
@@ -245,7 +129,13 @@ function LoginForm() {
           disabled={loading}
           className="w-full h-12 bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-base shadow-sm"
         >
-          {loading ? "Memproses Masuk..." : "Masuk ke Akun"}
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" /> Memproses Masuk...
+            </span>
+          ) : (
+            "Masuk ke Akun"
+          )}
         </Button>
       </form>
 
@@ -262,7 +152,7 @@ function LoginForm() {
             href="/daftar-supplier"
             className="flex-1 py-2.5 px-3 border border-ink-200 rounded-[10px] text-xs font-semibold text-ocean-900 hover:bg-sky-50 text-center transition-colors"
           >
-            Daftar Mitra (Nelayan/Pembudidaya)
+            Daftar Mitra (Nelayan/Tambak)
           </Link>
         </div>
       </div>

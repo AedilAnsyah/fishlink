@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fish, Building2, User, Mail, Phone, Lock, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
+import { registerAccount } from "@/lib/auth";
 import { LocationSelector } from "@/components/shared/LocationSelector";
 
 export default function DaftarBuyerPage() {
@@ -44,57 +44,29 @@ export default function DaftarBuyerPage() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
+      const res = await registerAccount({
+        email: email.trim(),
+        phone: phone.trim(),
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: "buyer",
-          },
-        },
+        fullName: fullName.trim(),
+        businessName: businessName.trim(),
+        businessType,
+        role: "buyer",
+        location: locationLabel.trim(),
       });
 
-      if (authError) {
-        // Only block for duplicate registration — this is a real user error
-        if (authError.message.includes("already registered")) {
-          setErrorMessage("Email ini sudah terdaftar. Silakan masuk menggunakan email dan kata sandi Anda.");
-          setLoading(false);
-          return;
-        }
-        // For rate limits or other Supabase issues, continue with cookie-based session
-        console.warn("Supabase signup warning (proceeding with local session):", authError.message);
+      if (!res.success) {
+        setErrorMessage(res.error || "Gagal mendaftar. Silakan coba lagi.");
+        setLoading(false);
+        return;
       }
 
-      if (authData?.user) {
-        await supabase.from("profiles").insert({
-          id: authData.user.id,
-          role: "buyer",
-          full_name: fullName,
-          phone: phone,
-        });
-
-        await supabase.from("buyer_profiles").insert({
-          profile_id: authData.user.id,
-          business_name: businessName,
-          business_type: businessType,
-          address: locationLabel,
-        });
-      }
+      setLoading(false);
+      router.push("/dashboard");
     } catch {
-      // Fallback — continue with cookie-based auth
+      setErrorMessage("Terjadi kesalahan saat mendaftar. Silakan coba lagi.");
+      setLoading(false);
     }
-
-    // Set full client cookies for immediate session
-    document.cookie = `fishlink_mock_role=buyer; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_location=${encodeURIComponent(locationLabel)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_phone=${encodeURIComponent(phone)}; path=/; max-age=86400; SameSite=Lax`;
-
-    setLoading(false);
-    router.push("/dashboard");
   };
 
   return (
