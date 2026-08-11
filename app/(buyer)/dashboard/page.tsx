@@ -60,66 +60,21 @@ export default function BuyerDashboardPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    // Fetch initial orders
     async function loadOrders() {
       setLoadingOrders(true);
-      const { data: userData } = await supabase.auth.getUser();
-
-      if (userData?.user) {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("buyer_id", userData.user.id)
-          .order("created_at", { ascending: false });
-
-        if (data && data.length > 0) {
-          const mapped = data.map((o, idx) => ({
-            ...o,
-            itemSummary: "Pesanan Hasil Laut Segar",
-            supplierName: "Mitra Supplier Fishlink",
-          }));
-          setOrders(mapped);
+      try {
+        const res = await fetch("/api/buyer/orders");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.orders)) {
+          setOrders(data.orders);
         }
+      } catch (err) {
+        console.error("Failed to load buyer orders:", err);
+      } finally {
+        setLoadingOrders(false);
       }
-      setLoadingOrders(false);
     }
     loadOrders();
-
-    // Supabase Realtime Subscription to orders table
-    const channel = supabase
-      .channel("buyer_orders_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        (payload) => {
-          setIsRealtimeActive(true);
-          if (payload.eventType === "UPDATE") {
-            const updated = payload.new as Order;
-            setOrders((prev) =>
-              prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o))
-            );
-          } else if (payload.eventType === "INSERT") {
-            const newOrder = payload.new as Order;
-            setOrders((prev) => [
-              {
-                ...newOrder,
-                itemSummary: "Pesanan Baru Hasil Laut",
-                supplierName: "Mitra Supplier Fishlink",
-              },
-              ...prev,
-            ]);
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          setIsRealtimeActive(true);
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   return (

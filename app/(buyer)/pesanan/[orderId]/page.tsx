@@ -8,8 +8,7 @@ import { Footer } from "@/components/shared/Footer";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { OrderQRCode } from "@/components/shared/OrderQRCode";
 import { RatingForm } from "@/components/buyer/RatingForm";
-import { Order, OrderItem, OrderStatus } from "@/types/database.types";
-import { createClient } from "@/lib/supabase/client";
+import { OrderStatus } from "@/types/database.types";
 import {
   ArrowLeft,
   Calendar,
@@ -21,6 +20,7 @@ import {
   MessageCircle,
   Truck,
   Anchor,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -28,56 +28,33 @@ export default function DetailPesananBuyerPage() {
   const params = useParams();
   const orderId = (params?.orderId as string) || "o1111111-1111-1111-1111-111111111111";
 
-  const [orderStatus, setOrderStatus] = useState<OrderStatus>("dalam_pengiriman");
+  const [order, setOrder] = useState<any>(null);
+  const [orderStatus, setOrderStatus] = useState<OrderStatus>("diproses_supplier");
   const [deliveryDate, setDeliveryDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
   const [subtotal, setSubtotal] = useState<number>(4250000);
-  const [isRealtimeActive, setIsRealtimeActive] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = createClient();
-
-    // Fetch order details
     async function loadOrder() {
-      const { data } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("id", orderId)
-        .single();
-
-      if (data) {
-        setOrderStatus(data.status);
-        if (data.delivery_schedule) setDeliveryDate(data.delivery_schedule);
-        if (data.subtotal) setSubtotal(data.subtotal);
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/buyer/orders?orderId=${orderId}`);
+        const data = await res.json();
+        if (data.success && data.order) {
+          setOrder(data.order);
+          setOrderStatus(data.order.status || "diproses_supplier");
+          if (data.order.delivery_schedule) setDeliveryDate(data.order.delivery_schedule);
+          if (data.order.subtotal) setSubtotal(Number(data.order.subtotal));
+        }
+      } catch (err) {
+        console.error("Failed to load order:", err);
+      } finally {
+        setLoading(false);
       }
     }
     loadOrder();
-
-    // Realtime listener for order status change
-    const channel = supabase
-      .channel(`order_${orderId}_realtime`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `id=eq.${orderId}`,
-        },
-        (payload) => {
-          setIsRealtimeActive(true);
-          const updated = payload.new as Order;
-          if (updated.status) setOrderStatus(updated.status);
-        }
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") setIsRealtimeActive(true);
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [orderId]);
 
   return (
@@ -114,19 +91,6 @@ export default function DetailPesananBuyerPage() {
 
             <div className="flex items-center gap-3">
               <StatusBadge status={orderStatus} />
-
-              {/* Demo Status Switcher for testing rating form & realtime */}
-              <select
-                value={orderStatus}
-                onChange={(e) => setOrderStatus(e.target.value as OrderStatus)}
-                className="text-xs border border-ink-200 rounded-lg p-1.5 font-bold bg-sky-50 text-ocean-900 outline-none"
-                title="Simulasi Ubah Status untuk Evaluasi UI"
-              >
-                <option value="menunggu_pembayaran">Simulasi: Menunggu Pembayaran</option>
-                <option value="dibayar">Simulasi: Dibayar</option>
-                <option value="dalam_pengiriman">Simulasi: Dalam Pengiriman</option>
-                <option value="diterima">Simulasi: Diterima (Tampil Form Rating)</option>
-              </select>
             </div>
           </div>
 
@@ -143,25 +107,53 @@ export default function DetailPesananBuyerPage() {
                 </h3>
 
                 <div className="space-y-3 divide-y divide-ink-100">
-                  <div className="pt-2 flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src="/fresh-fish.png"
-                        alt="Kakap Merah"
-                        className="w-12 h-12 rounded-xl object-cover border border-ink-200"
-                      />
-                      <div>
-                        <h4 className="font-bold text-ink-900">Kakap Merah Segar Tangkapan Subuh</h4>
-                        <p className="text-[11px] text-ink-700">Mitra: Tangkapan Pak Udung (Muara Angke)</p>
+                  {order?.order_items && order.order_items.length > 0 ? (
+                    order.order_items.map((item: any) => (
+                      <div key={item.id} className="pt-3 flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={item.products?.photo_url || "/fresh-fish.png"}
+                            alt={item.products?.fish_name || "Ikan Segar"}
+                            className="w-12 h-12 rounded-xl object-cover border border-ink-200"
+                          />
+                          <div>
+                            <h4 className="font-bold text-ink-900 text-sm">
+                              {item.products?.fish_name || "Hasil Laut Segar Tangkapan Pesisir"}
+                            </h4>
+                            <p className="text-[11px] text-ink-700">
+                              Mitra: {item.suppliers?.business_name || "Tangkapan Mitra Nelayan"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-ink-900 block">{item.quantity_kg} kg</span>
+                          <span className="text-ocean-900 font-bold tabular-nums">
+                            Rp {(Number(item.price_per_kg_at_order) * Number(item.quantity_kg)).toLocaleString("id-ID")}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="pt-2 flex justify-between items-center text-xs">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src="/fresh-fish.png"
+                          alt="Hasil Laut"
+                          className="w-12 h-12 rounded-xl object-cover border border-ink-200"
+                        />
+                        <div>
+                          <h4 className="font-bold text-ink-900">Hasil Laut Segar Terpilih</h4>
+                          <p className="text-[11px] text-ink-700">Mitra: Mitra Nelayan Fishlink</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-ink-900 block">Total Paket</span>
+                        <span className="text-ocean-900 font-bold tabular-nums">
+                          Rp {subtotal.toLocaleString("id-ID")}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-bold text-ink-900 block">50 kg</span>
-                      <span className="text-ocean-900 font-bold tabular-nums">
-                        Rp 4.250.000
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-ink-100 flex justify-between items-center text-xs font-bold">
@@ -176,7 +168,7 @@ export default function DetailPesananBuyerPage() {
               {orderStatus === "diterima" && (
                 <RatingForm
                   orderId={orderId}
-                  supplierId="s1111111-1111-1111-1111-111111111111"
+                  supplierId={order?.order_items?.[0]?.supplier_id || "s1111111-1111-1111-1111-111111111111"}
                 />
               )}
 
@@ -187,7 +179,7 @@ export default function DetailPesananBuyerPage() {
                     <QrCode className="w-5 h-5 text-sky-400" /> Pantau Histori Cold-Chain Traceability
                   </h4>
                   <p className="text-xs text-ink-700">
-                    Lihat grafik suhu es, lokasi transit, dan histori kapal pencatat.
+                    Lihat grafik suhu es, lokasi transit, dan histori armada pencatat.
                   </p>
                 </div>
 

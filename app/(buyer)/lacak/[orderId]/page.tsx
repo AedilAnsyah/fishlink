@@ -34,18 +34,13 @@ export default function LacakTraceabilityPage() {
   useEffect(() => {
     async function loadEvents() {
       try {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("tracking_events")
-          .select("*")
-          .eq("order_id", orderId)
-          .order("occurred_at", { ascending: true });
-
-        if (data && data.length > 0) {
-          setEvents(data);
+        const res = await fetch(`/api/buyer/orders?orderId=${orderId}`);
+        const data = await res.json();
+        if (data.success && data.order?.tracking_events && data.order.tracking_events.length > 0) {
+          setEvents(data.order.tracking_events);
         }
       } catch {
-        // Fallback to dummy
+        // Fallback to seed events
       }
     }
     loadEvents();
