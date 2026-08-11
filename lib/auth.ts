@@ -1,5 +1,3 @@
-import { createClient } from "@/lib/supabase/client";
-
 export interface RegisteredUser {
   id: string;
   email: string;
@@ -10,7 +8,7 @@ export interface RegisteredUser {
   role: "buyer" | "supplier";
   location: string;
   supplierType?: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 const STORAGE_KEY = "fishlink_registered_users_db";
@@ -25,7 +23,6 @@ const DEFAULT_USERS: RegisteredUser[] = [
     businessName: "Restoran Seafood Bahari, Senopati",
     role: "buyer",
     location: "Senopati, Jakarta Selatan",
-    createdAt: new Date().toISOString(),
   },
   {
     id: "u-seed-supplier",
@@ -37,12 +34,11 @@ const DEFAULT_USERS: RegisteredUser[] = [
     role: "supplier",
     location: "Depo Seafood Purwokerto, Jawa Tengah",
     supplierType: "nelayan_perorangan",
-    createdAt: new Date().toISOString(),
   },
 ];
 
 /**
- * Get all registered users from local persistent storage
+ * Get all registered users from local storage
  */
 export function getRegisteredUsers(): RegisteredUser[] {
   if (typeof window === "undefined") return DEFAULT_USERS;
@@ -53,7 +49,6 @@ export function getRegisteredUsers(): RegisteredUser[] {
       return DEFAULT_USERS;
     }
     const parsed: RegisteredUser[] = JSON.parse(raw);
-    // Ensure default demo users exist
     const merged = [...DEFAULT_USERS];
     for (const u of parsed) {
       if (!merged.some((m) => m.email.toLowerCase() === u.email.toLowerCase() || (m.phone && m.phone === u.phone))) {
@@ -67,7 +62,7 @@ export function getRegisteredUsers(): RegisteredUser[] {
 }
 
 /**
- * Save or update a user in local persistent storage
+ * Save user locally
  */
 export function saveRegisteredUser(user: RegisteredUser): void {
   if (typeof window === "undefined") return;
@@ -143,7 +138,7 @@ export function clearSessionCookies(): void {
 }
 
 /**
- * Full register flow: saves locally and syncs with Supabase
+ * Register account via Server API (central Supabase database)
  */
 export async function registerAccount(params: {
   email: string;
@@ -156,224 +151,121 @@ export async function registerAccount(params: {
   businessType?: string;
   supplierType?: string;
 }): Promise<{ success: boolean; error?: string; user?: RegisteredUser }> {
-  // Check if identifier already exists locally
-  const existing = findUserByIdentifier(params.email || params.phone);
-  if (existing) {
-    // If it's already registered with same email or phone
-    const isSameEmail = params.email && existing.email.toLowerCase() === params.email.toLowerCase();
-    return {
-      success: false,
-      error: isSameEmail
-        ? "Email ini sudah terdaftar. Silakan masuk menggunakan email dan kata sandi Anda."
-        : "Nomor HP ini sudah terdaftar. Silakan masuk menggunakan nomor HP dan kata sandi Anda.",
-    };
-  }
-
-  const userId = `u-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  const effectiveEmail = params.email.trim() || `${params.phone.replace(/\D/g, "")}@supplier.fishlink.id`;
-
-  const newUser: RegisteredUser = {
-    id: userId,
-    email: effectiveEmail,
-    phone: params.phone,
-    password: params.password,
-    fullName: params.fullName,
-    businessName: params.businessName,
-    role: params.role,
-    location: params.location,
-    supplierType: params.supplierType,
-    createdAt: new Date().toISOString(),
-  };
-
-  // 1. Always save in local registry
-  saveRegisteredUser(newUser);
-
-  // 2. Set session cookies
-  setSessionCookies({
-    role: newUser.role,
-    fullName: newUser.fullName,
-    businessName: newUser.businessName,
-    location: newUser.location,
-    phone: newUser.phone,
-    supplierType: newUser.supplierType,
-  });
-
-  // 3. Attempt Supabase Auth & Database insertion
   try {
-    const supabase = createClient();
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: effectiveEmail,
-      password: params.password,
-      options: {
-        data: {
-          full_name: params.fullName,
-          role: params.role,
-        },
-      },
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
     });
 
-    if (authData?.user) {
-      await supabase.from("profiles").insert({
-        id: authData.user.id,
-        role: params.role,
-        full_name: params.fullName,
-        phone: params.phone,
-      });
+    const data = await res.json();
 
-      if (params.role === "buyer") {
-        await supabase.from("buyer_profiles").insert({
-          profile_id: authData.user.id,
-          business_name: params.businessName,
-          business_type: params.businessType || "Restoran Seafood",
-          address: params.location,
-        });
-      } else {
-        await supabase.from("suppliers").insert({
-          profile_id: authData.user.id,
-          supplier_type: params.supplierType || "nelayan_perorangan",
-          business_name: params.businessName,
-          address_label: params.location,
-          location: `POINT(109.2344 -7.4243)`,
-        });
-      }
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        error: data.error || "Gagal mendaftar. Silakan coba lagi.",
+      };
     }
-  } catch (err) {
-    console.warn("Supabase registration sync warning:", err);
-  }
 
-  return { success: true, user: newUser };
+    const registeredUser: RegisteredUser = {
+      ...data.user,
+      password: params.password,
+    };
+
+    // Save locally for instant offline cache
+    saveRegisteredUser(registeredUser);
+
+    // Set session cookies
+    setSessionCookies({
+      role: registeredUser.role,
+      fullName: registeredUser.fullName,
+      businessName: registeredUser.businessName,
+      location: registeredUser.location,
+      phone: registeredUser.phone,
+      supplierType: registeredUser.supplierType,
+    });
+
+    return { success: true, user: registeredUser };
+  } catch (err: any) {
+    console.error("registerAccount error:", err);
+    return {
+      success: false,
+      error: "Terjadi gangguan koneksi server. Silakan periksa jaringan internet Anda.",
+    };
+  }
 }
 
 /**
- * Full login flow: verifies local registry & Supabase Auth
+ * Login account via Server API (central Supabase database)
  */
 export async function loginAccount(
   identifier: string,
   password: string
 ): Promise<{ success: boolean; error?: string; user?: RegisteredUser }> {
-  const trimmed = identifier.trim();
-
-  // 1. Check in local registered users registry first
-  const localMatch = findUserByIdentifier(trimmed);
-
-  if (localMatch) {
-    if (localMatch.password && localMatch.password !== password) {
-      return { success: false, error: "Kata sandi yang Anda masukkan salah. Silakan coba lagi." };
-    }
-
-    // Success via local registry
-    setSessionCookies({
-      role: localMatch.role,
-      fullName: localMatch.fullName,
-      businessName: localMatch.businessName,
-      location: localMatch.location,
-      phone: localMatch.phone,
-      supplierType: localMatch.supplierType,
-    });
-
-    // Also attempt Supabase sign in in background to establish realtime session
-    try {
-      const supabase = createClient();
-      await supabase.auth.signInWithPassword({
-        email: localMatch.email,
-        password,
-      });
-    } catch {
-      // Ignore background sync error
-    }
-
-    return { success: true, user: localMatch };
-  }
-
-  // 2. If not found in local registry, attempt Supabase Auth directly
   try {
-    const supabase = createClient();
-    let authEmail = trimmed;
-    if (!trimmed.includes("@")) {
-      authEmail = `${trimmed.replace(/\D/g, "")}@supplier.fishlink.id`;
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password,
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, password }),
     });
 
-    if (error) {
-      return {
-        success: false,
-        error: trimmed.includes("@")
-          ? "Email atau kata sandi salah. Silakan periksa kembali."
-          : "Nomor HP atau kata sandi salah. Pastikan Anda sudah terdaftar.",
-      };
-    }
+    const data = await res.json();
 
-    if (data.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, full_name, phone")
-        .eq("id", data.user.id)
-        .single();
-
-      const role = (profile?.role === "supplier" ? "supplier" : "buyer") as "buyer" | "supplier";
-      const fullName = profile?.full_name || data.user.user_metadata?.full_name || "Pengguna";
-      const phone = profile?.phone || "";
-
-      let businessName = "";
-      let locationLabel = "";
-      let supplierType = "";
-
-      if (role === "buyer") {
-        const { data: buyerProfile } = await supabase
-          .from("buyer_profiles")
-          .select("business_name, address")
-          .eq("profile_id", data.user.id)
-          .single();
-        businessName = buyerProfile?.business_name || "Usaha Pembeli";
-        locationLabel = buyerProfile?.address || "";
-      } else {
-        const { data: supplierProfile } = await supabase
-          .from("suppliers")
-          .select("business_name, address_label, supplier_type")
-          .eq("profile_id", data.user.id)
-          .single();
-        businessName = supplierProfile?.business_name || `Mitra ${fullName}`;
-        locationLabel = supplierProfile?.address_label || "";
-        supplierType = supplierProfile?.supplier_type || "nelayan_perorangan";
+    if (!res.ok || !data.success || !data.user) {
+      // If server failed or offline, fallback to local match if available
+      const localMatch = findUserByIdentifier(identifier);
+      if (localMatch && localMatch.password === password) {
+        setSessionCookies({
+          role: localMatch.role,
+          fullName: localMatch.fullName,
+          businessName: localMatch.businessName,
+          location: localMatch.location,
+          phone: localMatch.phone,
+          supplierType: localMatch.supplierType,
+        });
+        return { success: true, user: localMatch };
       }
 
-      const syncedUser: RegisteredUser = {
-        id: data.user.id,
-        email: data.user.email || authEmail,
-        phone,
-        password,
-        fullName,
-        businessName,
-        role,
-        location: locationLabel,
-        supplierType,
-        createdAt: new Date().toISOString(),
+      return {
+        success: false,
+        error: data.error || "Email/Nomor HP atau kata sandi salah. Silakan periksa kembali.",
       };
-
-      // Save to local registry for subsequent instant logins
-      saveRegisteredUser(syncedUser);
-
-      setSessionCookies({
-        role,
-        fullName,
-        businessName,
-        location: locationLabel,
-        phone,
-        supplierType,
-      });
-
-      return { success: true, user: syncedUser };
     }
-  } catch {
-    // Network or other failure
-  }
 
-  return {
-    success: false,
-    error: "Akun tidak ditemukan atau kata sandi salah. Pastikan email/no HP dan kata sandi Anda benar.",
-  };
+    const user: RegisteredUser = data.user;
+
+    // Cache locally
+    saveRegisteredUser(user);
+
+    // Set session cookies
+    setSessionCookies({
+      role: user.role,
+      fullName: user.fullName,
+      businessName: user.businessName,
+      location: user.location,
+      phone: user.phone,
+      supplierType: user.supplierType,
+    });
+
+    return { success: true, user };
+  } catch (err: any) {
+    // If network error, check local cache
+    const localMatch = findUserByIdentifier(identifier);
+    if (localMatch && localMatch.password === password) {
+      setSessionCookies({
+        role: localMatch.role,
+        fullName: localMatch.fullName,
+        businessName: localMatch.businessName,
+        location: localMatch.location,
+        phone: localMatch.phone,
+        supplierType: localMatch.supplierType,
+      });
+      return { success: true, user: localMatch };
+    }
+
+    return {
+      success: false,
+      error: "Terjadi gangguan koneksi. Pastikan internet Anda aktif lalu coba lagi.",
+    };
+  }
 }
