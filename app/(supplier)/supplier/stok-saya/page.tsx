@@ -9,10 +9,50 @@ import { SEED_PRODUCTS } from "@/lib/supabase/seed-data";
 import { Package, Camera, Calendar, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { createClient } from "@/lib/supabase/client";
+
 export default function StokSayaPage() {
-  const [products, setProducts] = useState<ProductWithSupplier[]>(
-    SEED_PRODUCTS.filter((p) => p.supplier_id === "s1111111-1111-1111-1111-111111111111")
-  );
+  const [products, setProducts] = useState<ProductWithSupplier[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const cookies = document.cookie.split(";").reduce((acc, c) => {
+      const [k, v] = c.trim().split("=");
+      if (k && v) acc[k] = decodeURIComponent(v);
+      return acc;
+    }, {} as Record<string, string>);
+
+    if (cookies.fishlink_mock_name === "Pak Udung" || !cookies.fishlink_mock_name) {
+      setProducts(SEED_PRODUCTS.filter((p) => p.supplier_id === "s1111111-1111-1111-1111-111111111111"));
+      setLoading(false);
+    } else {
+      async function loadSupplierProducts() {
+        try {
+          const supabase = createClient();
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
+            const { data: supp } = await supabase
+              .from("suppliers")
+              .select("id")
+              .eq("profile_id", userData.user.id)
+              .single();
+
+            if (supp?.id) {
+              const { data } = await supabase
+                .from("products")
+                .select("*, suppliers(*)")
+                .eq("supplier_id", supp.id);
+              if (data) setProducts(data as any);
+            }
+          }
+        } catch {
+          // Empty state
+        }
+        setLoading(false);
+      }
+      loadSupplierProducts();
+    }
+  }, []);
 
   const toggleActive = (id: string) => {
     setProducts((prev) =>
@@ -50,7 +90,25 @@ export default function StokSayaPage() {
           </div>
 
           <div className="space-y-4">
-            {products.map((product) => (
+            {products.length === 0 ? (
+              <div className="bg-white p-10 rounded-2xl border-2 border-dashed border-ink-200 text-center space-y-4 shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-sky-100 text-ocean-900 mx-auto flex items-center justify-center shadow-xs">
+                  <Package className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-extrabold text-ink-900">Belum Ada Stok Hasil Laut</h3>
+                  <p className="text-sm text-ink-700 max-w-md mx-auto">
+                    Toko Anda siap berjualan! Ambil foto hasil tangkapan atau panen tambak Anda sekarang untuk ditayangkan di katalog pembeli.
+                  </p>
+                </div>
+                <Link href="/supplier/stok-saya/tambah" className="inline-block pt-2">
+                  <Button className="bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-sm px-6 h-12 rounded-xl shadow-md gap-2">
+                    <Camera className="w-4 h-4 text-sky-400" /> Pasang Stok Ikan Pertama
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              products.map((product) => (
               <div
                 key={product.id}
                 className="bg-white p-5 rounded-2xl border-2 border-ink-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
@@ -112,7 +170,7 @@ export default function StokSayaPage() {
                   </Button>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
         </div>

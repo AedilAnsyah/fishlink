@@ -25,10 +25,11 @@ import {
 import { Button } from "@/components/ui/button";
 
 export default function BuyerDashboardPage() {
-  const [orders, setOrders] = useState<(Order & { itemSummary: string; supplierName: string })[]>(SEED_ORDERS);
+  const [orders, setOrders] = useState<(Order & { itemSummary: string; supplierName: string })[]>([]);
   const [isRealtimeActive, setIsRealtimeActive] = useState(false);
-  const [userName, setUserName] = useState("Bambang Hartono");
-  const [userBusiness, setUserBusiness] = useState("Restoran Seafood Bahari");
+  const [userName, setUserName] = useState("Pembeli Baru");
+  const [userBusiness, setUserBusiness] = useState("Restoran / Usaha Pembeli");
+  const [loadingOrders, setLoadingOrders] = useState(true);
 
   useEffect(() => {
     const cookies = document.cookie.split(";").reduce((acc, c) => {
@@ -39,6 +40,13 @@ export default function BuyerDashboardPage() {
 
     if (cookies.fishlink_mock_name) setUserName(cookies.fishlink_mock_name);
     if (cookies.fishlink_mock_business) setUserBusiness(cookies.fishlink_mock_business);
+
+    // If demo test account, load SEED_ORDERS
+    if (cookies.fishlink_mock_name === "Bambang Hartono" || !cookies.fishlink_mock_name) {
+      setOrders(SEED_ORDERS);
+      setUserName("Bambang Hartono");
+      setUserBusiness("Restoran Seafood Bahari");
+    }
   }, []);
 
   const handleLogout = () => {
@@ -53,19 +61,26 @@ export default function BuyerDashboardPage() {
 
     // Fetch initial orders
     async function loadOrders() {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false });
+      setLoadingOrders(true);
+      const { data: userData } = await supabase.auth.getUser();
 
-      if (data && data.length > 0) {
-        const mapped = data.map((o, idx) => ({
-          ...o,
-          itemSummary: SEED_ORDERS[idx % SEED_ORDERS.length].itemSummary,
-          supplierName: SEED_ORDERS[idx % SEED_ORDERS.length].supplierName,
-        }));
-        setOrders(mapped);
+      if (userData?.user) {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("buyer_id", userData.user.id)
+          .order("created_at", { ascending: false });
+
+        if (data && data.length > 0) {
+          const mapped = data.map((o, idx) => ({
+            ...o,
+            itemSummary: "Pesanan Hasil Laut Segar",
+            supplierName: "Mitra Supplier Fishlink",
+          }));
+          setOrders(mapped);
+        }
       }
+      setLoadingOrders(false);
     }
     loadOrders();
 
@@ -172,7 +187,25 @@ export default function BuyerDashboardPage() {
               </div>
 
               <div className="space-y-4">
-                {orders.map((order) => (
+                {orders.length === 0 ? (
+                  <div className="bg-white p-10 rounded-2xl border-2 border-dashed border-ink-200 text-center space-y-4 shadow-xs">
+                    <div className="w-16 h-16 rounded-2xl bg-sky-100 text-ocean-900 mx-auto flex items-center justify-center shadow-xs">
+                      <ShoppingBag className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-extrabold text-ink-900">Belum Ada Pesanan Aktif</h3>
+                      <p className="text-sm text-ink-700 max-w-md mx-auto">
+                        Selamat datang di Fishlink! Anda belum memiliki transaksi pesanan. Mulai jelajahi hasil laut segar bersertifikat cold-chain langsung dari nelayan.
+                      </p>
+                    </div>
+                    <Link href="/katalog" className="inline-block pt-2">
+                      <Button className="bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-sm px-6 h-12 rounded-xl shadow-md gap-2">
+                        <Plus className="w-4 h-4" /> Jelajahi Katalog Hasil Laut
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  orders.map((order) => (
                   <div
                     key={order.id}
                     className="bg-white p-5 rounded-2xl border border-ink-200 shadow-xs space-y-3 hover:border-ocean-900/40 transition-colors"
@@ -231,7 +264,7 @@ export default function BuyerDashboardPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )))}
               </div>
             </div>
 

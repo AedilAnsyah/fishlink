@@ -264,25 +264,45 @@ create policy "reviews_buyer_write" on reviews
   for insert with check (auth.uid() = buyer_id);
 
 -- ============================================================
--- FUNGSI BANTUAN: pencarian produk terdekat (matching lokasi)
+-- TRIGGER: Otomatis buat profile & buyer/supplier row saat auth.users register
 -- ============================================================
-create or replace function nearby_products(buyer_lat float, buyer_lng float, radius_km float default 50)
-returns table (
-  product_id uuid,
-  fish_name text,
-  price_per_kg numeric,
-  supplier_id uuid,
-  supplier_name text,
-  distance_km float,
-  catch_or_harvest_date date
-) language sql stable as $$
-  select
-    p.id, p.fish_name, p.price_per_kg, s.id, s.business_name,
-    ST_Distance(s.location, ST_MakePoint(buyer_lng, buyer_lat)::geography) / 1000.0 as distance_km,
-    p.catch_or_harvest_date
-  from products p
-  join suppliers s on s.id = p.supplier_id
-  where p.is_active = true
-    and ST_DWithin(s.location, ST_MakePoint(buyer_lng, buyer_lat)::geography, radius_km * 1000)
-  order by distance_km asc;
-$$;
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, role, full_name, phone)
+  values (
+    new.id,
+    coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'buyer'::public.user_role),
+    coalesce(new.raw_user_meta_data->>'full_name', 'Pengguna Baru'),
+    new.raw_user_meta_data->>'phone'
+  )
+  on conflict (id) do nothing;
+
+  if (new.raw_user_meta_data->>'role' = 'supplier') then
+    insert into public.suppliers (profile_id, supplier_type, business_name, location)
+    values (
+      new.id,
+      'nelayan_perorangan',
+      coalesce(new.raw_user_meta_data->>'business_name', 'Usaha Hasil Laut'),
+      ST_MakePoint(109.2344, -7.4243)::geography
+    )
+    on conflict do nothing;
+  else
+    insert into public.buyer_profiles (profile_id, business_name, business_type)
+    values (
+      new.id,
+      coalesce(new.raw_user_meta_data->>'business_name', 'Usaha Pembeli'),
+      'Restoran Seafood'
+    )
+    on conflict do nothing;
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
