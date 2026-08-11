@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fish, Anchor, Ship, Waves, User, Phone, Lock, CheckCircle2, ShieldCheck, AlertCircle } from "lucide-react";
+import { Fish, Anchor, Ship, Waves, User, Phone, Lock, Mail, CheckCircle2, ShieldCheck, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LocationSelector } from "@/components/shared/LocationSelector";
 import { SupplierType } from "@/types/database.types";
@@ -16,6 +16,7 @@ export default function DaftarSupplierPage() {
   const [supplierType, setSupplierType] = useState<SupplierType>("nelayan_perorangan");
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -45,12 +46,13 @@ export default function DaftarSupplierPage() {
     setLoading(true);
 
     const effectiveBusiness = businessName || `Tangkapan ${fullName}`;
-    const generatedEmail = `${phone.replace(/\D/g, "")}@supplier.fishlink.id`;
+    // Jika user mengisi email, gunakan email itu. Jika tidak, auto-generate dari nomor HP.
+    const authEmail = email.trim() || `${phone.replace(/\D/g, "")}@supplier.fishlink.id`;
 
     try {
       const supabase = createClient();
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: generatedEmail,
+        email: authEmail,
         password,
         options: {
           data: {
@@ -62,7 +64,7 @@ export default function DaftarSupplierPage() {
 
       if (authError) {
         if (authError.message.includes("already registered")) {
-          setErrorMessage("Nomor HP ini sudah terdaftar. Silakan masuk dengan nomor HP dan kata sandi Anda.");
+          setErrorMessage(email.trim() ? "Email ini sudah terdaftar. Silakan masuk dengan email dan kata sandi Anda." : "Nomor HP ini sudah terdaftar. Silakan masuk dengan nomor HP dan kata sandi Anda.");
         } else {
           setErrorMessage(`Gagal mendaftar: ${authError.message}`);
         }
@@ -276,27 +278,47 @@ export default function DaftarSupplierPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-ink-900 mb-1">
-                  Nomor HP / WhatsApp <span className="text-danger-600">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Phone className="h-5 w-5 text-ink-400" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-ink-900 mb-1">
+                    Email <span className="text-[11px] text-ink-400 font-normal">(Opsional)</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-4 w-4 text-ink-400" />
+                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="email@contoh.com"
+                      className="block w-full pl-9 pr-3 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 text-sm outline-none"
+                    />
                   </div>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="contoh: 081234567890"
-                    className="block w-full pl-11 pr-4 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 text-base outline-none"
-                    required
-                  />
                 </div>
-                <p className="text-xs text-ink-700 mt-1">
-                  Nomor ini akan menjadi <strong>identitas login</strong> Anda dan digunakan untuk notifikasi pesanan masuk.
-                </p>
+
+                <div>
+                  <label className="block text-sm font-semibold text-ink-900 mb-1">
+                    Nomor HP / WhatsApp <span className="text-danger-600">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Phone className="h-4 w-4 text-ink-400" />
+                    </div>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="081234567890"
+                      className="block w-full pl-9 pr-3 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 text-sm outline-none"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
+              <p className="text-xs text-ink-500 -mt-2">
+                Isi email jika ingin login dengan email. Jika tidak, gunakan nomor HP untuk login.
+              </p>
 
               <div>
                 <label className="block text-sm font-semibold text-ink-900 mb-1">
@@ -343,7 +365,7 @@ export default function DaftarSupplierPage() {
             <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl text-xs text-ink-700 flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 text-ocean-900 shrink-0 mt-0.5" />
               <span>
-                Setelah mendaftar, Anda dapat masuk kapan saja menggunakan <strong>Nomor HP</strong> dan <strong>Kata Sandi</strong> yang Anda buat di atas.
+                Setelah mendaftar, Anda dapat masuk menggunakan <strong>{email.trim() ? "Email" : "Nomor HP"}</strong> dan <strong>Kata Sandi</strong> yang Anda buat di atas.
               </span>
             </div>
 

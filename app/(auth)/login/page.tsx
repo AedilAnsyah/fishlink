@@ -84,25 +84,27 @@ function LoginForm() {
       return;
     }
 
-    // Determine the email to use for Supabase Auth
-    let authEmail = identifier;
-    if (isPhone(identifier)) {
-      // If user typed a phone number, convert it to the auto-generated supplier email
-      authEmail = phoneToEmail(identifier);
-    }
-
     // Try Supabase Auth
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
+
+      // First attempt: use identifier as-is (email or phone-to-email)
+      let authEmail = identifier;
+      if (isPhone(identifier)) {
+        authEmail = phoneToEmail(identifier);
+      }
+
+      let { data, error } = await supabase.auth.signInWithPassword({
         email: authEmail,
         password,
       });
 
+      // If phone-to-email login failed, maybe the supplier registered with a real email
+      // In that case the user might be typing their phone but their account uses real email
+      // So we don't need a second attempt — just show error
       if (error) {
-        // If phone-based login failed, and identifier could be a phone, show helpful message
         if (isPhone(identifier)) {
-          setErrorMessage("Nomor HP atau kata sandi salah. Pastikan Anda sudah terdaftar sebagai mitra.");
+          setErrorMessage("Nomor HP atau kata sandi salah. Pastikan Anda sudah terdaftar atau coba login dengan email.");
         } else {
           setErrorMessage("Email atau kata sandi salah. Silakan periksa kembali atau daftar akun baru.");
         }
@@ -193,7 +195,7 @@ function LoginForm() {
             />
           </div>
           <p className="text-[11px] text-ink-400 mt-1">
-            Pembeli: gunakan email yang didaftarkan. Mitra Supplier: gunakan nomor HP WhatsApp.
+            Masukkan email atau nomor HP yang Anda gunakan saat mendaftar.
           </p>
         </div>
 
