@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand */
+    --ocean-900: #135A86;
+    --ocean-700: #1B729F;
+    --ocean-500: #2E8FBE;
+    --sky-400:   #38BDF8;
+    --sky-200:   #B7E6FB;
+    --sky-50:    #EAF8FE;
+
+    /* Netral */
+    --ink-900:  #0E2530;
+    --ink-700:  #375363;
+    --ink-400:  #7C93A0;
+    --ink-200:  #D6E2E7;
+    --ink-100:  #EDF3F5;
+    --off-white: #F7FAFB;
+
+    /* Semantik */
+    --success-600: #1F8A5F;
+    --success-100: #DFF4EA;
+    --warning-600: #C77B15;
+    --warning-100: #FBEBD3;
+    --danger-600:  #C0392B;
+    --danger-100:  #F8DDD9;
+
+    /* Suhu cold-chain */
+    --cold-chain-cool: #38BDF8;
+    --cold-chain-warn: #C77B15;
+  }
+
+  body {
+    background-color: var(--off-white);
+    color: var(--ink-900);
+    font-family: var(--font-inter), Inter, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-plus-jakarta), "Plus Jakarta Sans", sans-serif;
+    color: var(--ink-900);
+  }
+}
+
+/* Tabular nums utility for prices, weights, temperatures */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Supplier layout adjustments as per design system §2 */
+.supplier-body-text {
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
