@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { LocationSelector } from "@/components/shared/LocationSelector";
 import { SupplierType } from "@/types/database.types";
 
+import { createClient } from "@/lib/supabase/client";
+
 export default function DaftarSupplierPage() {
   const router = useRouter();
 
@@ -20,7 +22,7 @@ export default function DaftarSupplierPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -31,12 +33,49 @@ export default function DaftarSupplierPage() {
 
     setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
-      // Set role supplier mock cookie
-      document.cookie = "fishlink_mock_role=supplier; path=/; max-age=86400";
-      router.push("/supplier/beranda");
-    }, 800);
+    const effectiveBusiness = businessName || `Tangkapan ${fullName}`;
+    const generatedEmail = `${phone.replace(/\D/g, "")}@supplier.fishlink.id`;
+
+    try {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.signUp({
+        email: generatedEmail,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: "supplier",
+          },
+        },
+      });
+
+      if (authData?.user) {
+        await supabase.from("profiles").insert({
+          id: authData.user.id,
+          role: "supplier",
+          full_name: fullName,
+          phone: phone,
+        });
+
+        await supabase.from("suppliers").insert({
+          profile_id: authData.user.id,
+          supplier_type: supplierType,
+          business_name: effectiveBusiness,
+          address_label: locationLabel,
+          location: `POINT(109.2344 -7.4243)`,
+        });
+      }
+    } catch {
+      // Fallback
+    }
+
+    // Set full client cookies
+    document.cookie = `fishlink_mock_role=supplier; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_business=${encodeURIComponent(effectiveBusiness)}; path=/; max-age=86400; SameSite=Lax`;
+
+    setLoading(false);
+    router.push("/supplier/beranda");
   };
 
   return (

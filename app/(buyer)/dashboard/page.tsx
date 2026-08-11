@@ -27,6 +27,19 @@ import { Button } from "@/components/ui/button";
 export default function BuyerDashboardPage() {
   const [orders, setOrders] = useState<(Order & { itemSummary: string; supplierName: string })[]>(SEED_ORDERS);
   const [isRealtimeActive, setIsRealtimeActive] = useState(false);
+  const [userName, setUserName] = useState("Bambang Hartono");
+  const [userBusiness, setUserBusiness] = useState("Restoran Seafood Bahari");
+
+  useEffect(() => {
+    const cookies = document.cookie.split(";").reduce((acc, c) => {
+      const [k, v] = c.trim().split("=");
+      if (k && v) acc[k] = decodeURIComponent(v);
+      return acc;
+    }, {} as Record<string, string>);
+
+    if (cookies.fishlink_mock_name) setUserName(cookies.fishlink_mock_name);
+    if (cookies.fishlink_mock_business) setUserBusiness(cookies.fishlink_mock_business);
+  }, []);
 
   const handleLogout = () => {
     document.cookie = "fishlink_mock_role=; path=/; max-age=0";
@@ -106,13 +119,13 @@ export default function BuyerDashboardPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold">Restoran Seafood Bahari</h1>
+                <h1 className="text-xl sm:text-2xl font-bold">{userBusiness}</h1>
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ocean-900 bg-sky-200 px-2.5 py-0.5 rounded-full">
                   <Crown className="w-3.5 h-3.5 text-ocean-900" /> Premium Buyer
                 </span>
               </div>
               <p className="text-xs text-sky-200 mt-0.5">
-                Jl. Senopati No. 45, Jakarta Selatan • Bebas Kuota Matching Lokasi
+                {userName} • Purwokerto, Jawa Tengah • Bebas Kuota Matching Lokasi
               </p>
             </div>
           </div>

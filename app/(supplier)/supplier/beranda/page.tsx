@@ -21,6 +21,17 @@ export default function SupplierBerandaPage() {
   const [activeStockKg] = useState(450);
   const [newOrdersCount] = useState(2);
   const [monthlyEarnings] = useState(12850000);
+  const [userName, setUserName] = useState("Pak Udung");
+
+  React.useEffect(() => {
+    const cookies = document.cookie.split(";").reduce((acc, c) => {
+      const [k, v] = c.trim().split("=");
+      if (k && v) acc[k] = decodeURIComponent(v);
+      return acc;
+    }, {} as Record<string, string>);
+
+    if (cookies.fishlink_mock_name) setUserName(cookies.fishlink_mock_name);
+  }, []);
 
   return (
     <div className="min-h-screen bg-off-white flex flex-col font-sans supplier-body-text">
@@ -37,7 +48,7 @@ export default function SupplierBerandaPage() {
                 <span className="text-xs font-bold text-success-600">Status Toko: Aktif & Buka</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-ink-900">
-                Halo, Pak Udung!
+                Halo, {userName}!
               </h1>
               <p className="text-base text-ink-700">
                 Lokasi Dermaga: <strong>Depo Seafood Purwokerto, Jawa Tengah</strong>

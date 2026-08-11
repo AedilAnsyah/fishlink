@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fish, Building2, User, Mail, Phone, Lock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
 import { LocationSelector } from "@/components/shared/LocationSelector";
 
 export default function DaftarBuyerPage() {
@@ -20,7 +21,7 @@ export default function DaftarBuyerPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -31,12 +32,45 @@ export default function DaftarBuyerPage() {
 
     setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
-      // Set role buyer mock cookie
-      document.cookie = "fishlink_mock_role=buyer; path=/; max-age=86400";
-      router.push("/beranda");
-    }, 800);
+    try {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: "buyer",
+          },
+        },
+      });
+
+      if (authData?.user) {
+        await supabase.from("profiles").insert({
+          id: authData.user.id,
+          role: "buyer",
+          full_name: fullName,
+          phone: phone,
+        });
+
+        await supabase.from("buyer_profiles").insert({
+          profile_id: authData.user.id,
+          business_name: businessName,
+          business_type: businessType,
+          address: locationLabel,
+        });
+      }
+    } catch {
+      // Fallback
+    }
+
+    // Set full client cookies
+    document.cookie = `fishlink_mock_role=buyer; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
+
+    setLoading(false);
+    router.push("/dashboard");
   };
 
   return (
