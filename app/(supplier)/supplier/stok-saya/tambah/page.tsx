@@ -92,59 +92,34 @@ export default function TambahStokPage() {
 
     let photoUrl = photoPreview || "/fresh-fish.png";
 
-    // Attempt Supabase upload if available
     try {
-      if (photoFile) {
-        const supabase = createClient();
-        const fileName = `product-${Date.now()}.jpg`;
-        const { data } = await supabase.storage
-          .from("product-photos")
-          .upload(fileName, photoFile);
-        if (data?.path) {
-          const { data: publicUrlData } = supabase.storage
-            .from("product-photos")
-            .getPublicUrl(data.path);
-          if (publicUrlData?.publicUrl) {
-            photoUrl = publicUrlData.publicUrl;
-          }
-        }
-      }
-
-      // Insert product row for the current authenticated supplier
-      const supabase = createClient();
-      const { data: userData } = await supabase.auth.getUser();
-      let targetSupplierId = "s1111111-1111-1111-1111-111111111111"; // Fallback demo ID
-
-      if (userData?.user) {
-        const { data: supp } = await supabase
-          .from("suppliers")
-          .select("id")
-          .eq("profile_id", userData.user.id)
-          .single();
-        if (supp?.id) targetSupplierId = supp.id;
-      }
-
-      await supabase.from("products").insert({
-        supplier_id: targetSupplierId,
-        fish_name: fishName,
-        price_per_kg: pricePerKg,
-        stock_kg: stockKg,
-        catch_or_harvest_date: catchDate,
-        photo_url: photoUrl,
-        season_tag: "Segar Harian",
-        is_active: true,
+      const res = await fetch("/api/supplier/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fishName,
+          pricePerKg,
+          stockKg,
+          catchDate,
+          photoUrl,
+          seasonTag: "Segar Harian",
+        }),
       });
-    } catch {
-      // Ignore if offline / fallback
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        console.warn("API insert warning:", data.error);
+      }
+    } catch (err) {
+      console.error("Failed to add product:", err);
     }
 
+    setLoading(false);
+    setSuccessMsg(true);
     setTimeout(() => {
-      setLoading(false);
-      setSuccessMsg(true);
-      setTimeout(() => {
-        router.push("/supplier/stok-saya");
-      }, 1500);
-    }, 800);
+      router.push("/supplier/stok-saya");
+    }, 1200);
   };
 
   return (

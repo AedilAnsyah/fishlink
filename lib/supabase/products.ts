@@ -9,9 +9,8 @@ export interface ProductWithSupplier extends Product {
 }
 
 /**
- * Fetch all active products from Supabase.
- * Falls back to SEED_PRODUCTS from centralized seed-data.ts
- * when Supabase is not configured.
+ * Fetch all active products from Supabase database.
+ * Merges real products with default seed products.
  */
 export async function fetchProducts(): Promise<ProductWithSupplier[]> {
   try {
@@ -26,10 +25,25 @@ export async function fetchProducts(): Promise<ProductWithSupplier[]> {
       return SEED_PRODUCTS;
     }
 
-    return data.map((item, idx) => ({
+    const realProducts: ProductWithSupplier[] = data.map((item, idx) => ({
       ...item,
-      distance_km: (idx + 1) * 12,
-    })) as ProductWithSupplier[];
+      suppliers: item.suppliers || {
+        id: item.supplier_id,
+        business_name: "Mitra Nelayan Lokal",
+        supplier_type: "nelayan_perorangan",
+        address_label: "Depo Seafood Purwokerto, Jawa Tengah",
+        is_trusted_badge: true,
+        average_rating: 4.9,
+      },
+      distance_km: (idx + 1) * 8,
+    }));
+
+    // Filter out seed duplicates if real products exist
+    const seedFiltered = SEED_PRODUCTS.filter(
+      (s) => !realProducts.some((r) => r.id === s.id)
+    );
+
+    return [...realProducts, ...seedFiltered];
   } catch {
     return SEED_PRODUCTS;
   }
@@ -37,7 +51,6 @@ export async function fetchProducts(): Promise<ProductWithSupplier[]> {
 
 /**
  * Fetch a single product by ID from Supabase.
- * Falls back to SEED_PRODUCTS from centralized seed-data.ts.
  */
 export async function fetchProductById(
   id: string
@@ -57,6 +70,14 @@ export async function fetchProductById(
 
     return {
       ...data,
+      suppliers: data.suppliers || {
+        id: data.supplier_id,
+        business_name: "Mitra Nelayan Lokal",
+        supplier_type: "nelayan_perorangan",
+        address_label: "Depo Seafood Purwokerto, Jawa Tengah",
+        is_trusted_badge: true,
+        average_rating: 4.9,
+      },
       distance_km: 12,
     } as ProductWithSupplier;
   } catch {

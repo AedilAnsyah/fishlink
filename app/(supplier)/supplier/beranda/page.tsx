@@ -16,9 +16,10 @@ import {
   ArrowRight,
   Sparkles,
   MapPin,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 
 interface SupplierOrderSummary {
   id: string;
@@ -31,116 +32,60 @@ interface SupplierOrderSummary {
 
 export default function SupplierBerandaPage() {
   const [userName, setUserName] = useState("Mitra Supplier");
-  const [userLocation, setUserLocation] = useState("Dermaga / Tambak Belum Diatur");
+  const [userLocation, setUserLocation] = useState("Dermaga / Pangkalan Nelayan");
   const [activeStockKg, setActiveStockKg] = useState(0);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [monthlyEarnings, setMonthlyEarnings] = useState(0);
   const [recentOrders, setRecentOrders] = useState<SupplierOrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadData = async () => {
+    setLoading(true);
+
     const cookies = document.cookie.split(";").reduce((acc, c) => {
       const [k, v] = c.trim().split("=");
       if (k && v) acc[k] = decodeURIComponent(v);
       return acc;
     }, {} as Record<string, string>);
 
-    const name = cookies.fishlink_mock_name || "Mitra Supplier";
-    const location = cookies.fishlink_mock_location || "Dermaga / Pangkalan Nelayan";
-    setUserName(name);
-    setUserLocation(location);
+    if (cookies.fishlink_mock_name) setUserName(cookies.fishlink_mock_name);
+    if (cookies.fishlink_mock_location) setUserLocation(cookies.fishlink_mock_location);
 
-    // If Demo user "Pak Udung"
-    if (name === "Pak Udung") {
-      setActiveStockKg(450);
-      setNewOrdersCount(2);
-      setMonthlyEarnings(12850000);
-      setRecentOrders([
-        {
-          id: "o1111111-1111-1111-1111-111111111111",
-          fishName: "Kakap Merah Tangkapan Subuh",
-          quantityKg: 50,
-          subtotal: 4250000,
-          buyerName: "Restoran Seafood Bahari (Senopati)",
-          status: "diproses_supplier",
-        },
-      ]);
-      setLoading(false);
-      return;
-    }
-
-    // For other / newly registered suppliers, fetch real data from Supabase
-    async function loadSupplierData() {
-      try {
-        const supabase = createClient();
-        const { data: userData } = await supabase.auth.getUser();
-
-        if (userData?.user) {
-          // Fetch supplier profile
-          const { data: supp } = await supabase
-            .from("suppliers")
-            .select("id, address_label, business_name")
-            .eq("profile_id", userData.user.id)
-            .single();
-
-          if (supp) {
-            if (supp.address_label) setUserLocation(supp.address_label);
-
-            // Fetch products for active stock calculation
-            const { data: prods } = await supabase
-              .from("products")
-              .select("stock_kg, is_active")
-              .eq("supplier_id", supp.id);
-
-            if (prods && prods.length > 0) {
-              const totalKg = prods
-                .filter((p) => p.is_active)
-                .reduce((sum, p) => sum + Number(p.stock_kg || 0), 0);
-              setActiveStockKg(totalKg);
-            }
-
-            // Fetch orders for this supplier
-            const { data: items } = await supabase
-              .from("order_items")
-              .select("*, orders(*)")
-              .eq("supplier_id", supp.id);
-
-            if (items && items.length > 0) {
-              const pendingItems = items.filter(
-                (it: any) =>
-                  it.orders?.status === "diproses_supplier" ||
-                  it.orders?.status === "menunggu_kurir"
-              );
-              setNewOrdersCount(pendingItems.length);
-
-              const earnings = items
-                .filter((it: any) => it.orders?.status === "diterima")
-                .reduce(
-                  (sum: number, it: any) =>
-                    sum + Number(it.price_per_kg_at_order || 0) * Number(it.quantity_kg || 0),
-                  0
-                );
-              setMonthlyEarnings(earnings);
-
-              const mappedOrders: SupplierOrderSummary[] = pendingItems.map((it: any) => ({
-                id: it.order_id,
-                fishName: "Hasil Laut Segar",
-                quantityKg: it.quantity_kg,
-                subtotal: Number(it.price_per_kg_at_order || 0) * Number(it.quantity_kg || 0),
-                buyerName: "Mitra Pembeli",
-                status: it.orders?.status || "diproses_supplier",
-              }));
-              setRecentOrders(mappedOrders);
-            }
-          }
-        }
-      } catch {
-        // Safe fallback
+    try {
+      // 1. Fetch Products
+      const prodRes = await fetch("/api/supplier/products");
+      const prodData = await prodRes.json();
+      if (prodData.success && Array.isArray(prodData.products)) {
+        const totalKg = prodData.products
+          .filter((p: any) => p.is_active)
+          .reduce((sum: number, p: any) => sum + Number(p.stock_kg || 0), 0);
+        setActiveStockKg(totalKg);
       }
+
+      // 2. Fetch Orders
+      const orderRes = await fetch("/api/supplier/orders");
+      const orderData = await orderRes.json();
+      if (orderData.success && Array.isArray(orderData.orders)) {
+        const pending = orderData.orders.filter(
+          (o: any) => o.status === "diproses_supplier" || o.status === "menunggu_kurir"
+        );
+        setNewOrdersCount(pending.length);
+        setRecentOrders(pending);
+
+        const earnings = orderData.orders
+          .filter((o: any) => o.status === "diterima")
+          .reduce((sum: number, o: any) => sum + Number(o.subtotal || 0), 0);
+        setMonthlyEarnings(earnings > 0 ? earnings : 0);
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard data:", err);
+    } finally {
       setLoading(false);
     }
+  };
 
-    loadSupplierData();
+  useEffect(() => {
+    loadData();
   }, []);
 
   return (
@@ -167,16 +112,27 @@ export default function SupplierBerandaPage() {
               </p>
             </div>
 
-            {/* Action Button: Tambah Stok Baru */}
-            <Link href="/supplier/stok-saya/tambah" className="w-full sm:w-auto">
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                className="w-full sm:w-auto px-8 py-4 bg-ocean-900 hover:bg-ocean-700 text-white font-black text-lg rounded-2xl shadow-md flex items-center justify-center gap-3 active:scale-95 transition-all min-h-[56px]"
+                onClick={loadData}
+                className="p-3 bg-white hover:bg-sky-50 border border-ink-200 rounded-2xl text-ink-700 transition-colors"
+                title="Muat ulang data"
               >
-                <Camera className="w-6 h-6 text-sky-400" />
-                <span>Tambah Stok Baru</span>
+                <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin text-ocean-900" : ""}`} />
               </button>
-            </Link>
+
+              <Link href="/supplier/stok-saya/tambah" className="w-full sm:w-auto">
+                <button
+                  type="button"
+                  className="w-full sm:w-auto px-6 py-3.5 bg-ocean-900 hover:bg-ocean-700 text-white font-black text-base rounded-2xl shadow-md flex items-center justify-center gap-2.5 active:scale-95 transition-all min-h-[50px]"
+                >
+                  <Camera className="w-5 h-5 text-sky-400" />
+                  <span>Tambah Stok Baru</span>
+                </button>
+              </Link>
+            </div>
           </div>
 
           {/* 3 Summary Cards */}

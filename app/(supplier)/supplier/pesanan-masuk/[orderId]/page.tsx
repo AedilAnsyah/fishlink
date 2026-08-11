@@ -31,24 +31,24 @@ export default function PesananMasukDetailPage() {
     setUpdating(true);
 
     try {
-      const supabase = createClient();
-      await supabase.from("orders").update({ status: newStatus }).eq("id", orderId);
-      await supabase.from("tracking_events").insert({
-        order_id: orderId,
-        event_label: trackingLabel,
-        location_label: "Depo Purwokerto (Pengiriman Supplier)",
-        temperature_c: -1.5,
+      await fetch("/api/supplier/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          status: newStatus,
+          locationLabel: "Depo Purwokerto (Pengiriman Supplier)",
+          temperatureC: -1.5,
+        }),
       });
-    } catch {
-      // Ignore if offline
+    } catch (err) {
+      console.error("Failed to update status:", err);
     }
 
-    setTimeout(() => {
-      setUpdating(false);
-      setCurrentStatus(newStatus);
-      setToastMsg(`Status berhasil diperbarui ke: ${trackingLabel}!`);
-      setTimeout(() => setToastMsg(null), 3000);
-    }, 600);
+    setUpdating(false);
+    setCurrentStatus(newStatus);
+    setToastMsg(`Status berhasil diperbarui ke: ${trackingLabel}!`);
+    setTimeout(() => setToastMsg(null), 3000);
   };
 
   return (

@@ -67,58 +67,33 @@ export default function CheckoutPage() {
   const handleMockPayment = async () => {
     setIsProcessing(true);
 
-    const generatedOrderId = `o${Date.now().toString(36)}`;
-    setCreatedOrderId(generatedOrderId);
+    let finalOrderId = `o${Date.now().toString(36)}`;
 
-    // Save order records in Supabase DB if available
     try {
-      const supabase = createClient();
-      
-      // Insert order
-      await supabase.from("orders").insert({
-        id: generatedOrderId,
-        status: "dibayar",
-        delivery_schedule: deliveryDate,
-        warehouse_id: warehouseId,
-        subtotal: grandTotal,
+      const res = await fetch("/api/buyer/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          grandTotal,
+          deliveryDate,
+          paymentMethod,
+          locationLabel: "Cold Storage Hub Purwokerto, Jawa Tengah",
+        }),
       });
 
-      // Insert order items
-      for (const item of items) {
-        await supabase.from("order_items").insert({
-          order_id: generatedOrderId,
-          product_id: item.productId,
-          supplier_id: item.supplierId,
-          quantity_kg: item.quantityKg,
-          price_per_kg_at_order: item.pricePerKg,
-        });
+      const data = await res.json();
+      if (data?.orderId) {
+        finalOrderId = data.orderId;
       }
-
-      // Insert mock payment
-      await supabase.from("payments").insert({
-        order_id: generatedOrderId,
-        amount: grandTotal,
-        method: paymentMethod,
-        status: "paid",
-        paid_at: new Date().toISOString(),
-      });
-
-      // Insert first cold-chain tracking event
-      await supabase.from("tracking_events").insert({
-        order_id: generatedOrderId,
-        event_label: "Pesanan Dikonfirmasi & Masuk Cold-Chain",
-        location_label: "Cold Storage Hub Purwokerto, Jawa Tengah",
-        temperature_c: -2.5,
-      });
-    } catch {
-      // Ignore if offline
+    } catch (err) {
+      console.error("Order creation error:", err);
     }
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      setPaymentCompleted(true);
-      clearCart();
-    }, 1200);
+    setCreatedOrderId(finalOrderId);
+    setIsProcessing(false);
+    setPaymentCompleted(true);
+    clearCart();
   };
 
   if (!loaded) {
