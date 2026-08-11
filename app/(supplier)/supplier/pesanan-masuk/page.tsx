@@ -27,9 +27,37 @@ export default function PesananMasukPage() {
     try {
       const res = await fetch("/api/supplier/orders");
       const data = await res.json();
+      let apiOrders: SupplierOrder[] = [];
       if (data.success && Array.isArray(data.orders)) {
-        setOrders(data.orders);
+        apiOrders = data.orders;
       }
+
+      // Merge with localStorage orders
+      const { getLocalOrders } = await import("@/lib/local-orders");
+      const localOrders = getLocalOrders();
+      const mergedMap = new Map<string, SupplierOrder>();
+
+      // Add local orders first (most recent)
+      for (const lo of localOrders) {
+        mergedMap.set(lo.id, {
+          id: lo.id,
+          buyerName: lo.buyerName || "Restoran Seafood Bahari",
+          fishName: lo.fishName || "Hasil Laut Segar",
+          quantityKg: Number(lo.quantityKg),
+          subtotal: Number(lo.subtotal),
+          status: lo.status || "diproses_supplier",
+          dateLabel: lo.dateLabel || "Baru saja",
+        });
+      }
+
+      // Add API orders
+      for (const ao of apiOrders) {
+        if (!mergedMap.has(ao.id)) {
+          mergedMap.set(ao.id, ao);
+        }
+      }
+
+      setOrders(Array.from(mergedMap.values()));
     } catch (err) {
       console.error("Failed to load supplier orders:", err);
     } finally {

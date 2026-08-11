@@ -90,6 +90,27 @@ export default function CheckoutPage() {
       console.error("Order creation error:", err);
     }
 
+    // Save order & stock deductions to local storage for instant supplier view
+    try {
+      const { saveLocalOrder, recordLocalStockDeduction } = await import("@/lib/local-orders");
+      for (const item of items) {
+        saveLocalOrder({
+          id: finalOrderId,
+          buyerName: "Restoran Seafood Bahari",
+          fishName: item.fishName || "Hasil Laut Segar",
+          quantityKg: Number(item.quantityKg),
+          subtotal: Number(item.pricePerKg) * Number(item.quantityKg),
+          status: "diproses_supplier",
+          dateLabel: "Baru saja",
+          supplierId: item.supplierId || "s1111111-1111-1111-1111-111111111111",
+          created_at: new Date().toISOString(),
+        });
+        recordLocalStockDeduction(item.productId, item.quantityKg);
+      }
+    } catch (err) {
+      console.error("Error saving local order:", err);
+    }
+
     setCreatedOrderId(finalOrderId);
     setIsProcessing(false);
     setPaymentCompleted(true);

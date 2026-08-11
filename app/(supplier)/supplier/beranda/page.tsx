@@ -62,21 +62,46 @@ export default function SupplierBerandaPage() {
         setActiveStockKg(totalKg);
       }
 
-      // 2. Fetch Orders
+      // 2. Fetch Orders & Merge with Local Storage
       const orderRes = await fetch("/api/supplier/orders");
       const orderData = await orderRes.json();
+      let apiOrders: any[] = [];
       if (orderData.success && Array.isArray(orderData.orders)) {
-        const pending = orderData.orders.filter(
-          (o: any) => o.status === "diproses_supplier" || o.status === "menunggu_kurir"
-        );
-        setNewOrdersCount(pending.length);
-        setRecentOrders(pending);
-
-        const earnings = orderData.orders
-          .filter((o: any) => o.status === "diterima")
-          .reduce((sum: number, o: any) => sum + Number(o.subtotal || 0), 0);
-        setMonthlyEarnings(earnings > 0 ? earnings : 0);
+        apiOrders = orderData.orders;
       }
+
+      const { getLocalOrders } = await import("@/lib/local-orders");
+      const localOrders = getLocalOrders();
+      const mergedMap = new Map<string, any>();
+
+      for (const lo of localOrders) {
+        mergedMap.set(lo.id, {
+          id: lo.id,
+          buyerName: lo.buyerName || "Restoran Seafood Bahari",
+          fishName: lo.fishName || "Hasil Laut Segar",
+          quantityKg: Number(lo.quantityKg),
+          subtotal: Number(lo.subtotal),
+          status: lo.status || "diproses_supplier",
+        });
+      }
+
+      for (const ao of apiOrders) {
+        if (!mergedMap.has(ao.id)) {
+          mergedMap.set(ao.id, ao);
+        }
+      }
+
+      const allOrders = Array.from(mergedMap.values());
+      const pending = allOrders.filter(
+        (o: any) => o.status === "diproses_supplier" || o.status === "menunggu_kurir"
+      );
+      setNewOrdersCount(pending.length);
+      setRecentOrders(pending);
+
+      const earnings = allOrders
+        .filter((o: any) => o.status === "diterima")
+        .reduce((sum: number, o: any) => sum + Number(o.subtotal || 0), 0);
+      setMonthlyEarnings(earnings > 0 ? earnings : 0);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     } finally {

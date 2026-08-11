@@ -18,7 +18,16 @@ export default function StokSayaPage() {
       const res = await fetch("/api/supplier/products");
       const data = await res.json();
       if (data.success && Array.isArray(data.products)) {
-        setProducts(data.products);
+        const { getLocalStockDeductions } = await import("@/lib/local-orders");
+        const deductions = getLocalStockDeductions();
+        const updated = data.products.map((p: ProductWithSupplier) => {
+          const dec = Number(deductions[p.id] || 0);
+          return {
+            ...p,
+            stock_kg: Math.max(0, Number(p.stock_kg || 0) - dec),
+          };
+        });
+        setProducts(updated);
       }
     } catch (err) {
       console.error("Failed to load products:", err);
