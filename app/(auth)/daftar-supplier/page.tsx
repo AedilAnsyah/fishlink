@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fish, Anchor, Ship, Waves, User, Phone, Lock, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Fish, Anchor, Ship, Waves, User, Phone, Lock, CheckCircle2, ShieldCheck, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LocationSelector } from "@/components/shared/LocationSelector";
 import { SupplierType } from "@/types/database.types";
@@ -18,6 +18,7 @@ export default function DaftarSupplierPage() {
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -31,6 +32,16 @@ export default function DaftarSupplierPage() {
       return;
     }
 
+    if (password.length < 6) {
+      setErrorMessage("Kata sandi harus minimal 6 karakter.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Konfirmasi kata sandi tidak cocok. Silakan periksa kembali.");
+      return;
+    }
+
     setLoading(true);
 
     const effectiveBusiness = businessName || `Tangkapan ${fullName}`;
@@ -38,7 +49,7 @@ export default function DaftarSupplierPage() {
 
     try {
       const supabase = createClient();
-      const { data: authData } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: generatedEmail,
         password,
         options: {
@@ -48,6 +59,16 @@ export default function DaftarSupplierPage() {
           },
         },
       });
+
+      if (authError) {
+        if (authError.message.includes("already registered")) {
+          setErrorMessage("Nomor HP ini sudah terdaftar. Silakan masuk dengan nomor HP dan kata sandi Anda.");
+        } else {
+          setErrorMessage(`Gagal mendaftar: ${authError.message}`);
+        }
+        setLoading(false);
+        return;
+      }
 
       if (authData?.user) {
         await supabase.from("profiles").insert({
@@ -66,10 +87,10 @@ export default function DaftarSupplierPage() {
         });
       }
     } catch {
-      // Fallback
+      // Fallback — continue with cookie-based auth
     }
 
-    // Set full client cookies
+    // Set full client cookies for immediate session
     document.cookie = `fishlink_mock_role=supplier; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_business=${encodeURIComponent(effectiveBusiness)}; path=/; max-age=86400; SameSite=Lax`;
@@ -103,8 +124,9 @@ export default function DaftarSupplierPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {errorMessage && (
-              <div className="p-4 bg-danger-100 border border-danger-600/30 text-danger-600 rounded-xl text-sm font-semibold">
-                {errorMessage}
+              <div className="p-4 bg-danger-100 border border-danger-600/30 text-danger-600 rounded-xl text-sm font-semibold flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
               </div>
             )}
 
@@ -219,7 +241,7 @@ export default function DaftarSupplierPage() {
             {/* Step 3: Identity & WhatsApp Info */}
             <div className="space-y-4 pt-2">
               <label className="block text-base font-bold text-ink-900">
-                3. Data Diri & Kontak WhatsApp
+                3. Data Diri & Akun Login
               </label>
 
               <div>
@@ -272,7 +294,7 @@ export default function DaftarSupplierPage() {
                   />
                 </div>
                 <p className="text-xs text-ink-700 mt-1">
-                  Kami akan mengirimkan notifikasi pesanan masuk dari pembeli langsung ke WhatsApp ini.
+                  Nomor ini akan menjadi <strong>identitas login</strong> Anda dan digunakan untuk notifikasi pesanan masuk.
                 </p>
               </div>
 
@@ -288,19 +310,48 @@ export default function DaftarSupplierPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Masukkan angka atau kata sandi mudah diingat"
+                    placeholder="Minimal 6 karakter"
                     className="block w-full pl-11 pr-4 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-base outline-none"
                     required
+                    minLength={6}
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-ink-900 mb-1">
+                  Konfirmasi Kata Sandi <span className="text-danger-600">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-ink-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Ketik ulang kata sandi"
+                    className="block w-full pl-11 pr-4 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-base outline-none"
+                    required
+                    minLength={6}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Login info box */}
+            <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl text-xs text-ink-700 flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-ocean-900 shrink-0 mt-0.5" />
+              <span>
+                Setelah mendaftar, Anda dapat masuk kapan saja menggunakan <strong>Nomor HP</strong> dan <strong>Kata Sandi</strong> yang Anda buat di atas.
+              </span>
             </div>
 
             {/* Single Large Main Action Button */}
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-14 bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-lg rounded-xl shadow-md mt-4"
+              className="w-full h-14 bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-lg rounded-xl shadow-md mt-2"
             >
               {loading ? "Mendaftarkan Akun Mitra..." : "⚓ Daftar Mitra Sekarang"}
             </Button>

@@ -43,13 +43,37 @@ export function Navbar() {
         return;
       }
 
-      // Supabase auth fallback check
+      // Supabase auth fallback check — query role & business from DB
       try {
         const supabase = createClient();
-        supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.auth.getUser().then(async ({ data: { user } }) => {
           if (user) {
-            setRole("buyer");
-            setUserName(user.user_metadata?.full_name || user.email || "Pengguna");
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role, full_name, phone")
+              .eq("id", user.id)
+              .single();
+
+            const detectedRole = (profile?.role === "supplier" ? "supplier" : "buyer") as "buyer" | "supplier";
+            const fullName = profile?.full_name || user.user_metadata?.full_name || "Pengguna";
+
+            let businessName = "";
+            if (detectedRole === "buyer") {
+              const { data: bp } = await supabase.from("buyer_profiles").select("business_name").eq("profile_id", user.id).single();
+              businessName = bp?.business_name || "Usaha Pembeli B2B";
+            } else {
+              const { data: sp } = await supabase.from("suppliers").select("business_name").eq("profile_id", user.id).single();
+              businessName = sp?.business_name || "Mitra Supplier";
+            }
+
+            // Sync cookies so all pages pick up session consistently
+            document.cookie = `fishlink_mock_role=${detectedRole}; path=/; max-age=86400; SameSite=Lax`;
+            document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
+            document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
+
+            setRole(detectedRole);
+            setUserName(fullName);
+            setUserBusiness(businessName);
           }
         });
       } catch {

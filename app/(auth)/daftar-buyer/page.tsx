@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fish, Building2, User, Mail, Phone, Lock, CheckCircle2 } from "lucide-react";
+import { Fish, Building2, User, Mail, Phone, Lock, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LocationSelector } from "@/components/shared/LocationSelector";
@@ -17,6 +17,7 @@ export default function DaftarBuyerPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -30,11 +31,21 @@ export default function DaftarBuyerPage() {
       return;
     }
 
+    if (password.length < 6) {
+      setErrorMessage("Kata sandi harus minimal 6 karakter.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Konfirmasi kata sandi tidak cocok. Silakan periksa kembali.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const supabase = createClient();
-      const { data: authData } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -44,6 +55,16 @@ export default function DaftarBuyerPage() {
           },
         },
       });
+
+      if (authError) {
+        if (authError.message.includes("already registered")) {
+          setErrorMessage("Email ini sudah terdaftar. Silakan masuk menggunakan email dan kata sandi Anda.");
+        } else {
+          setErrorMessage(`Gagal mendaftar: ${authError.message}`);
+        }
+        setLoading(false);
+        return;
+      }
 
       if (authData?.user) {
         await supabase.from("profiles").insert({
@@ -61,10 +82,10 @@ export default function DaftarBuyerPage() {
         });
       }
     } catch {
-      // Fallback
+      // Fallback — continue with cookie-based auth
     }
 
-    // Set full client cookies
+    // Set full client cookies for immediate session
     document.cookie = `fishlink_mock_role=buyer; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
@@ -98,8 +119,9 @@ export default function DaftarBuyerPage() {
           
           <form onSubmit={handleSubmit} className="space-y-5">
             {errorMessage && (
-              <div className="p-3.5 bg-danger-100 border border-danger-600/30 text-danger-600 rounded-xl text-xs font-semibold">
-                {errorMessage}
+              <div className="p-3.5 bg-danger-100 border border-danger-600/30 text-danger-600 rounded-xl text-xs font-semibold flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
               </div>
             )}
 
@@ -157,7 +179,7 @@ export default function DaftarBuyerPage() {
             {/* Account Info Section */}
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-ocean-900 uppercase tracking-wider">
-                2. Data Penanggung Jawab & Akun
+                2. Data Penanggung Jawab & Akun Login
               </h3>
 
               <div>
@@ -234,15 +256,44 @@ export default function DaftarBuyerPage() {
                     placeholder="Minimal 6 karakter"
                     className="block w-full pl-11 pr-4 h-11 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-sm outline-none"
                     required
+                    minLength={6}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-ink-900 mb-1">
+                  Konfirmasi Kata Sandi <span className="text-danger-600">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-ink-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Ketik ulang kata sandi"
+                    className="block w-full pl-11 pr-4 h-11 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-sm outline-none"
+                    required
+                    minLength={6}
                   />
                 </div>
               </div>
             </div>
 
+            {/* Login info box */}
+            <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl text-xs text-ink-700 flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-ocean-900 shrink-0 mt-0.5" />
+              <span>
+                Setelah mendaftar, Anda dapat masuk kapan saja menggunakan <strong>Email</strong> dan <strong>Kata Sandi</strong> yang Anda buat di atas.
+              </span>
+            </div>
+
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-12 bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-base shadow-sm mt-4"
+              className="w-full h-12 bg-ocean-900 hover:bg-ocean-700 text-white font-bold text-base shadow-sm mt-2"
             >
               {loading ? "Mendaftarkan Akun..." : "Daftar Akun Pembeli"}
             </Button>

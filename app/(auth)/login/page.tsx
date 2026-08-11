@@ -3,12 +3,12 @@
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Mail, ShieldCheck, Fish, Building2, Anchor, Eye, EyeOff } from "lucide-react";
+import { Lock, Mail, Phone, ShieldCheck, Fish, Building2, Anchor, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 /* ──────────────────────────────────────────────────────────────
-   Test Accounts (mock) — masing-masing 1 akun per role
+   Test / Demo Accounts — masing-masing 1 akun per role
    ────────────────────────────────────────────────────────────── */
 const TEST_ACCOUNTS = {
   buyer: {
@@ -32,36 +32,45 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get("redirect");
 
-  const [email, setEmail] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Login with test account or Supabase auth
+  // Determine if identifier looks like an email or phone number
+  const isEmail = (str: string) => str.includes("@");
+  const isPhone = (str: string) => /^[0-9+\-\s]{8,}$/.test(str.replace(/\s/g, ""));
+
+  // Convert phone number to the auto-generated email format used by supplier registration
+  const phoneToEmail = (phone: string) => {
+    const digits = phone.replace(/\D/g, "");
+    return `${digits}@supplier.fishlink.id`;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!email || !password) {
-      setErrorMessage("Silakan isi email dan kata sandi Anda.");
+    const identifier = loginIdentifier.trim();
+
+    if (!identifier || !password) {
+      setErrorMessage("Silakan isi email/nomor HP dan kata sandi Anda.");
       return;
     }
 
     setLoading(true);
 
-    // Check against test accounts first
+    // Check against test accounts first (by email)
     const matchedAccount = Object.values(TEST_ACCOUNTS).find(
-      (acc) => acc.email === email.toLowerCase() && acc.password === password
+      (acc) => acc.email === identifier.toLowerCase() && acc.password === password
     );
 
     if (matchedAccount) {
-      // Set mock role cookie for middleware
       document.cookie = `fishlink_mock_role=${matchedAccount.role}; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `fishlink_mock_name=${encodeURIComponent(matchedAccount.name)}; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `fishlink_mock_business=${encodeURIComponent(matchedAccount.business)}; path=/; max-age=86400; SameSite=Lax`;
 
-      // Small delay for UX
       await new Promise((r) => setTimeout(r, 600));
       setLoading(false);
 
@@ -75,28 +84,68 @@ function LoginForm() {
       return;
     }
 
-    // Try Supabase Auth if not a test account
+    // Determine the email to use for Supabase Auth
+    let authEmail = identifier;
+    if (isPhone(identifier)) {
+      // If user typed a phone number, convert it to the auto-generated supplier email
+      authEmail = phoneToEmail(identifier);
+    }
+
+    // Try Supabase Auth
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: authEmail,
         password,
       });
 
       if (error) {
-        setErrorMessage("Email atau kata sandi salah. Gunakan akun test di bawah untuk demo.");
+        // If phone-based login failed, and identifier could be a phone, show helpful message
+        if (isPhone(identifier)) {
+          setErrorMessage("Nomor HP atau kata sandi salah. Pastikan Anda sudah terdaftar sebagai mitra.");
+        } else {
+          setErrorMessage("Email atau kata sandi salah. Silakan periksa kembali atau daftar akun baru.");
+        }
         setLoading(false);
         return;
       }
 
       if (data.user) {
+        // Fetch user profile to determine role and set proper cookies
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, full_name, phone")
           .eq("id", data.user.id)
           .single();
 
         const role = profile?.role || "buyer";
+        const fullName = profile?.full_name || data.user.user_metadata?.full_name || "Pengguna";
+
+        // Fetch business name based on role
+        let businessName = "";
+        if (role === "buyer") {
+          const { data: buyerProfile } = await supabase
+            .from("buyer_profiles")
+            .select("business_name")
+            .eq("profile_id", data.user.id)
+            .single();
+          businessName = buyerProfile?.business_name || "Usaha Pembeli";
+        } else if (role === "supplier") {
+          const { data: supplierProfile } = await supabase
+            .from("suppliers")
+            .select("business_name")
+            .eq("profile_id", data.user.id)
+            .single();
+          businessName = supplierProfile?.business_name || "Mitra Supplier";
+        }
+
+        // Set cookies for the app to recognize the logged-in user
+        document.cookie = `fishlink_mock_role=${role}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
+
+        setLoading(false);
+
         if (redirectPath) {
           router.push(redirectPath);
         } else if (role === "supplier") {
@@ -104,34 +153,13 @@ function LoginForm() {
         } else {
           router.push("/dashboard");
         }
+        return;
       }
     } catch {
-      setErrorMessage("Email atau kata sandi salah. Gunakan akun test di bawah untuk demo.");
+      setErrorMessage("Terjadi kesalahan saat masuk. Silakan coba lagi.");
     }
 
     setLoading(false);
-  };
-
-  // Quick fill test account credentials
-  const fillTestAccount = (role: "buyer" | "supplier") => {
-    const account = TEST_ACCOUNTS[role];
-    setEmail(account.email);
-    setPassword(account.password);
-    setErrorMessage("");
-  };
-
-  // Quick demo login (skip form)
-  const handleQuickDemoLogin = (role: "buyer" | "supplier") => {
-    const account = TEST_ACCOUNTS[role];
-    document.cookie = `fishlink_mock_role=${account.role}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_name=${encodeURIComponent(account.name)}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `fishlink_mock_business=${encodeURIComponent(account.business)}; path=/; max-age=86400; SameSite=Lax`;
-
-    if (account.role === "supplier") {
-      router.push("/supplier/beranda");
-    } else {
-      router.push("/dashboard");
-    }
   };
 
   return (
@@ -146,20 +174,27 @@ function LoginForm() {
 
         <div>
           <label className="block text-sm font-semibold text-ink-900 mb-1">
-            Email
+            Email atau Nomor HP
           </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Mail className="h-5 w-5 text-ink-400" />
+              {isPhone(loginIdentifier) ? (
+                <Phone className="h-5 w-5 text-ink-400" />
+              ) : (
+                <Mail className="h-5 w-5 text-ink-400" />
+              )}
             </div>
             <input
               type="text"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="contoh: buyer@fishlink.id"
+              value={loginIdentifier}
+              onChange={(e) => setLoginIdentifier(e.target.value)}
+              placeholder="contoh: resto@email.com atau 081234567890"
               className="block w-full pl-11 pr-4 py-2.5 h-12 rounded-[10px] border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 focus:ring-2 focus:ring-ocean-900/20 text-sm outline-none"
             />
           </div>
+          <p className="text-[11px] text-ink-400 mt-1">
+            Pembeli: gunakan email yang didaftarkan. Mitra Supplier: gunakan nomor HP WhatsApp.
+          </p>
         </div>
 
         <div>
