@@ -122,6 +122,7 @@ export default function KatalogPage() {
               <LocationSelector
                 locationLabel={locationLabel}
                 onLocationChange={handleLocationChange}
+                variant="banner"
               />
             </div>
           </div>
