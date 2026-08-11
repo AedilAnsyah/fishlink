@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         const { data: profileByPhone } = await client
           .from("profiles")
           .select("id")
-          .eq("phone", trimmed)
+          .or(`phone.eq.${cleanPhone},phone.eq.${trimmed}`)
           .maybeSingle();
 
         if (profileByPhone && adminClient) {
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
 
         const role = (profile?.role === "supplier" ? "supplier" : "buyer") as "buyer" | "supplier";
         const fullName = profile?.full_name || authData.user.user_metadata?.full_name || "Pengguna";
-        const phone = profile?.phone || "";
+        const phone = profile?.phone || cleanPhone || "";
 
         let businessName = "";
         let locationLabel = "";

@@ -61,23 +61,25 @@ export async function POST(request: Request) {
 
     let createdUserId = `u-${Date.now()}`;
 
-    // 1. Try Supabase Admin (auto-confirm email, bypass rate limit & RLS)
+    // 1. Supabase Admin (auto-confirm email, bypass rate limit & RLS)
     if (adminClient) {
-      // Check if user already exists
-      const { data: existingProfile } = await adminClient
-        .from("profiles")
-        .select("id, phone")
-        .or(`phone.eq.${phone}`)
-        .maybeSingle();
+      // Check if phone already registered in profiles
+      if (cleanPhone) {
+        const { data: existingProfile } = await adminClient
+          .from("profiles")
+          .select("id, phone")
+          .or(`phone.eq.${cleanPhone},phone.eq.${phone}`)
+          .maybeSingle();
 
-      if (existingProfile) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Nomor HP atau Email ini sudah terdaftar. Silakan langsung masuk di halaman Login.",
-          },
-          { status: 400 }
-        );
+        if (existingProfile) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Nomor HP ini sudah terdaftar. Silakan langsung masuk di halaman Login.",
+            },
+            { status: 400 }
+          );
+        }
       }
 
       // Create confirmed user directly in auth.users
@@ -92,7 +94,8 @@ export async function POST(request: Request) {
       });
 
       if (authError) {
-        if (authError.message.includes("already registered") || authError.message.includes("already been registered")) {
+        const msg = authError.message.toLowerCase();
+        if (msg.includes("already registered") || msg.includes("already been registered") || msg.includes("exists")) {
           return NextResponse.json(
             {
               success: false,
@@ -112,7 +115,7 @@ export async function POST(request: Request) {
           id: authData.user.id,
           role,
           full_name: fullName,
-          phone: phone || null,
+          phone: cleanPhone || phone || null,
         });
 
         // Insert into role-specific table
@@ -146,14 +149,17 @@ export async function POST(request: Request) {
         },
       });
 
-      if (authError && (authError.message.includes("already registered") || authError.message.includes("already been registered"))) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Email atau Nomor HP ini sudah terdaftar. Silakan langsung masuk di halaman Login.",
-          },
-          { status: 400 }
-        );
+      if (authError) {
+        const msg = authError.message.toLowerCase();
+        if (msg.includes("already registered") || msg.includes("already been registered") || msg.includes("exists")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Email atau Nomor HP ini sudah terdaftar. Silakan langsung masuk di halaman Login.",
+            },
+            { status: 400 }
+          );
+        }
       }
 
       if (authData?.user) {
@@ -162,7 +168,7 @@ export async function POST(request: Request) {
           id: authData.user.id,
           role,
           full_name: fullName,
-          phone: phone || null,
+          phone: cleanPhone || phone || null,
         });
         if (role === "buyer") {
           await anonClient.from("buyer_profiles").insert({
@@ -186,7 +192,7 @@ export async function POST(request: Request) {
     const userData = {
       id: createdUserId,
       email: effectiveEmail,
-      phone: phone || "",
+      phone: cleanPhone || phone || "",
       fullName,
       businessName: effectiveBusiness,
       role,
