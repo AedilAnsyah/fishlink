@@ -29,11 +29,11 @@ export function SupplierNav() {
   const [userLocation, setUserLocation] = useState("Pangkalan Nelayan");
 
   const links = [
-    { href: "/supplier/beranda", label: "Beranda Utama", desc: "Ringkasan toko & order harian", icon: Anchor },
+    { href: "/supplier/beranda", label: "Beranda", desc: "Ringkasan toko & order harian", icon: Anchor },
     { href: "/supplier/stok-saya", label: "Stok Saya", desc: "Kelola pasokan hasil laut di katalog", icon: Package },
     { href: "/supplier/pesanan-masuk", label: "Pesanan Masuk", desc: "Daftar order restoran & pengiriman", icon: ShoppingBag },
-    { href: "/supplier/profil", label: "Profil & Lokasi Peta", desc: "Informasi diri & titik GPS dermaga", icon: User },
-    { href: "/supplier/perkiraan-pendapatan", label: "Analitik Pendapatan", desc: "Proyeksi keuntungan & tren musiman", icon: TrendingUp },
+    { href: "/supplier/profil", label: "Profil & Lokasi", desc: "Informasi diri & titik GPS dermaga", icon: User },
+    { href: "/supplier/perkiraan-pendapatan", label: "Pendapatan", desc: "Proyeksi keuntungan & tren musiman", icon: TrendingUp },
   ];
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export function SupplierNav() {
     setIsOpen(false);
   }, [pathname]);
 
-  // Lock body scroll when drawer open
+  // Lock body scroll when mobile drawer open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -79,19 +79,22 @@ export function SupplierNav() {
   return (
     <>
       <header className="bg-ocean-900 text-white sticky top-0 z-40 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+        {/* Main Header Bar */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           
-          {/* Left: Hamburger Button + Logo */}
+          {/* Left: Mobile Hamburger Button + Brand Logo */}
           <div className="flex items-center gap-3">
+            {/* Hamburger Button (Mobile only) */}
             <button
               type="button"
               onClick={() => setIsOpen(!isOpen)}
-              className="p-2 rounded-xl bg-ocean-800/80 hover:bg-ocean-700 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400"
+              className="md:hidden p-2 rounded-xl bg-ocean-800/80 hover:bg-ocean-700 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400"
               aria-label={isOpen ? "Tutup menu navigasi" : "Buka menu navigasi"}
             >
               {isOpen ? <X className="w-6 h-6 text-sky-400" /> : <Menu className="w-6 h-6 text-sky-400" />}
             </button>
 
+            {/* Brand Logo */}
             <Link href="/supplier/beranda" className="flex items-center gap-2.5 font-bold text-lg text-white">
               <img
                 src="/logo.png"
@@ -105,24 +108,40 @@ export function SupplierNav() {
             </Link>
           </div>
 
-          {/* Center (Desktop only): Quick active page indicator */}
-          <div className="hidden md:flex items-center gap-1.5 bg-ocean-950/60 px-3.5 py-1.5 rounded-full border border-ocean-700/60 text-xs">
-            <span className="w-2 h-2 rounded-full bg-success-500 animate-pulse" />
-            <span className="text-sky-100 font-medium">Menu Aktif:</span>
-            <span className="font-bold text-sky-300">
-              {links.find((l) => pathname === l.href || (l.href !== "/supplier/beranda" && pathname.startsWith(l.href)))?.label || "Supplier"}
-            </span>
-          </div>
+          {/* Center (Desktop only): Horizontal Navigation Links */}
+          <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+            {links.map((link) => {
+              const Icon = link.icon;
+              const isActive =
+                pathname === link.href ||
+                (link.href !== "/supplier/beranda" && pathname.startsWith(link.href));
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                    isActive
+                      ? "bg-sky-400 text-ink-900 shadow-xs"
+                      : "text-sky-100 hover:bg-ocean-800 hover:text-white"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
 
           {/* Right Actions: Quick Add Stock + Logout */}
           <div className="flex items-center gap-2.5">
             <Link href="/supplier/stok-saya/tambah">
               <button
                 type="button"
-                className="bg-sky-400 hover:bg-sky-300 text-ink-900 font-extrabold text-xs sm:text-sm px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                className="bg-sky-400 hover:bg-sky-300 text-ink-900 font-extrabold text-xs sm:text-sm px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all min-h-[40px]"
               >
                 <Camera className="w-4 h-4 text-ocean-900" />
-                <span className="hidden xs:inline sm:inline">Pasang Stok</span>
+                <span className="hidden xs:inline sm:inline">Tambah Stok Baru</span>
                 <span className="xs:hidden sm:hidden">Stok</span>
               </button>
             </Link>
@@ -130,26 +149,27 @@ export function SupplierNav() {
             <button
               type="button"
               onClick={handleLogout}
-              className="p-2 rounded-xl text-sky-200 hover:text-white hover:bg-danger-600/80 transition-colors"
-              title="Keluar dari Akun"
+              className="bg-danger-600/80 hover:bg-danger-600 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all min-h-[40px]"
+              title="Keluar dari Akun Supplier"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Keluar</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Slide-out Navigation Drawer */}
+      {/* Mobile Slide-out Navigation Drawer (Only triggers on mobile/tablet) */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="md:hidden fixed inset-0 z-50 flex">
           {/* Backdrop Blur Overlay */}
           <div
-            className="fixed inset-0 bg-ocean-950/60 backdrop-blur-xs transition-opacity duration-300 animate-fade-in"
+            className="fixed inset-0 bg-ocean-950/70 backdrop-blur-xs transition-opacity duration-300 animate-fade-in"
             onClick={() => setIsOpen(false)}
           />
 
           {/* Drawer Panel */}
-          <div className="relative w-full max-w-xs sm:max-w-sm bg-ocean-900 text-white h-full shadow-2xl flex flex-col z-10 border-r border-ocean-700 animate-slide-right">
+          <div className="relative w-full max-w-xs bg-ocean-900 text-white h-full shadow-2xl flex flex-col z-10 border-r border-ocean-700 animate-slide-right">
             
             {/* Drawer Header with Profile Card */}
             <div className="p-5 bg-ocean-950 border-b border-ocean-700 flex flex-col gap-3">
