@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "Fishlink — Marketplace Hasil Laut B2B & Cold-Chain Traceability",
   description:
     "Menghubungkan nelayan dan pembudidaya Indonesia langsung dengan restoran, hotel, dan industri pengolahan hasil laut dengan jaminan cold-chain.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

@@ -146,11 +146,6 @@ export default function BuyerDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {isRealtimeActive && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-success-600 text-white animate-pulse">
-                <Sparkles className="w-3.5 h-3.5" /> Supabase Realtime Aktif
-              </span>
-            )}
             <Link href="/katalog">
               <Button size="sm" className="bg-sky-400 hover:bg-sky-200 text-ink-900 font-bold text-xs gap-1.5">
                 <Plus className="w-4 h-4" /> Pesan Ikan Baru

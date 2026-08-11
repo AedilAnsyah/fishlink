@@ -94,11 +94,6 @@ export default function DetailPesananBuyerPage() {
             <ArrowLeft className="w-3.5 h-3.5" />
             Kembali ke Dashboard Pembeli
           </Link>
-          {isRealtimeActive && (
-            <span className="text-[11px] font-bold text-success-600 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" /> Live Realtime Status Connected
-            </span>
-          )}
         </div>
       </div>
 
