@@ -203,7 +203,7 @@ export default function ProfilSupplierPage() {
             </h1>
             {isTrustedBadge && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-success-100 text-success-600 border border-success-600/30">
-                <ShieldCheck className="w-4 h-4" /> Mitra Terpercaya Verified
+                <ShieldCheck className="w-4 h-4" /> Mitra Terverifikasi
               </span>
             )}
           </div>
