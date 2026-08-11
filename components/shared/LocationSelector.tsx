@@ -36,9 +36,16 @@ const INDONESIAN_REGIONS_GEO_LOOKUP = [
   { name: "Yogyakarta, D.I. Yogyakarta", lat: -7.7956, lng: 110.3695 },
 ];
 
+function sanitizeLocationLabel(raw: string): string {
+  if (!raw) return "Purwokerto, Jawa Tengah";
+  if (raw.includes("Lokasi GPS (") || raw.includes("(-7.") || raw.includes("(109.")) {
+    return "Purwokerto, Jawa Tengah";
+  }
+  return raw;
+}
+
 // Helper: Reverse Geocoding using Nominatim OpenStreetMap API with offline Haversine distance fallback
 async function reverseGeocodeArea(lat: number, lng: number): Promise<string> {
-  // 1. Attempt Nominatim OpenStreetMap API Reverse Geocoding
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,
@@ -71,7 +78,7 @@ async function reverseGeocodeArea(lat: number, lng: number): Promise<string> {
     // Ignore network error
   }
 
-  // 2. Haversine distance fallback to nearest Indonesian city/district
+  // Haversine distance fallback to nearest Indonesian city/district
   let minDistance = Infinity;
   let nearestRegion = "Purwokerto, Jawa Tengah";
 
@@ -96,7 +103,7 @@ async function reverseGeocodeArea(lat: number, lng: number): Promise<string> {
   return nearestRegion;
 }
 
-// Sub-component: Interactive Maplibre Map Pin Picker
+// Sub-component: Compact Interactive Maplibre Map Pin Picker
 function MapPinPicker({
   initialLat = -7.4243,
   initialLng = 109.2344,
@@ -114,10 +121,9 @@ function MapPinPicker({
     lat: initialLat,
     lng: initialLng,
   });
-  const [selectedArea, setSelectedArea] = useState<string>("Memuat titik lokasi...");
+  const [selectedArea, setSelectedArea] = useState<string>("Purwokerto Lor, Banyumas, Jawa Tengah");
   const [loadingArea, setLoadingArea] = useState(false);
 
-  // Initialize MapLibre
   useEffect(() => {
     let isMounted = true;
 
@@ -127,17 +133,34 @@ function MapPinPicker({
       try {
         const map = new maplibregl.Map({
           container: mapContainerRef.current,
-          style: "https://demotiles.maplibre.org/style.json",
+          style: {
+            version: 8,
+            sources: {
+              "osm-tiles": {
+                type: "raster",
+                tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+                tileSize: 256,
+                attribution: "&copy; OpenStreetMap contributors",
+              },
+            },
+            layers: [
+              {
+                id: "osm-tiles-layer",
+                type: "raster",
+                source: "osm-tiles",
+                minzoom: 0,
+                maxzoom: 19,
+              },
+            ],
+          },
           center: [initialLng, initialLat],
-          zoom: 12,
+          zoom: 13,
         });
 
-        // Add navigation controls (+ / - zoom)
         map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-        // Draggable Marker
         const marker = new maplibregl.Marker({
-          color: "#C0392B", // Red pin
+          color: "#C0392B",
           draggable: true,
         })
           .setLngLat([initialLng, initialLat])
@@ -155,16 +178,13 @@ function MapPinPicker({
           }
         };
 
-        // Initial Geocode
         updatePinPosition(initialLng, initialLat);
 
-        // On Marker Drag End
         marker.on("dragend", () => {
           const lngLat = marker.getLngLat();
           updatePinPosition(lngLat.lng, lngLat.lat);
         });
 
-        // On Map Click (move marker to clicked point)
         map.on("click", (e: any) => {
           const { lng, lat } = e.lngLat;
           marker.setLngLat([lng, lat]);
@@ -188,10 +208,10 @@ function MapPinPicker({
 
   return (
     <div className="space-y-3">
-      <div className="relative w-full h-[280px] rounded-xl overflow-hidden border-2 border-ocean-900 shadow-sm">
+      <div className="relative w-full h-[200px] sm:h-[220px] rounded-xl overflow-hidden border-2 border-ocean-900 shadow-sm">
         <div ref={mapContainerRef} className="w-full h-full" />
-        <div className="absolute top-2 left-2 bg-ocean-900/90 text-white text-[11px] font-bold px-3 py-1 rounded-lg backdrop-blur-xs shadow-md">
-          🖱️ Geser Pin atau Klik di Peta untuk Memilih Titik
+        <div className="absolute top-2 left-2 bg-ocean-900/95 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-xs shadow-md">
+          🖱️ Klik di Peta atau Geser Pin Merah 📍
         </div>
       </div>
 
@@ -201,7 +221,7 @@ function MapPinPicker({
         </span>
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-ocean-900 shrink-0" />
-          <strong className="text-ocean-900 font-extrabold text-sm">
+          <strong className="text-ocean-900 font-extrabold text-sm leading-snug">
             {loadingArea ? "Mencari Nama Daerah..." : selectedArea}
           </strong>
         </div>
@@ -211,7 +231,7 @@ function MapPinPicker({
         type="button"
         disabled={loadingArea}
         onClick={() => onPinSelect(selectedArea, currentCoords.lat, currentCoords.lng)}
-        className="w-full h-12 bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-sm rounded-xl shadow-md gap-2"
+        className="w-full h-11 bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md gap-2"
       >
         <CheckCircle2 className="w-4 h-4 text-sky-400" />
         <span>Gunakan Titik Lokasi Ini</span>
@@ -228,8 +248,11 @@ export function LocationSelector({
 }: LocationSelectorProps) {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"gps" | "map" | "search">("gps");
-  const [tempLocationInput, setTempLocationInput] = useState(locationLabel);
+  const [activeTab, setActiveTab] = useState<"gps" | "map" | "search">("map");
+
+  const cleanLabel = sanitizeLocationLabel(locationLabel);
+  const [tempLocationInput, setTempLocationInput] = useState(cleanLabel);
+
   const [statusMsg, setStatusMsg] = useState<{
     type: "success" | "error" | "info";
     text: string;
@@ -239,7 +262,7 @@ export function LocationSelector({
     if (!navigator.geolocation) {
       setStatusMsg({
         type: "error",
-        text: "Fitur GPS tidak didukung peramban ini. Silakan pilih atau ketik nama daerah Anda.",
+        text: "Fitur GPS tidak didukung peramban ini. Silakan pilih titik di peta atau ketik nama daerah.",
       });
       return;
     }
@@ -247,7 +270,7 @@ export function LocationSelector({
     setLoading(true);
     setStatusMsg({
       type: "info",
-      text: "Mendapatkan posisi GPS & mengonversi ke nama daerah (Desa/Kecamatan/Kabupaten)...",
+      text: "Mendapatkan posisi GPS & mengonversi ke nama daerah...",
     });
 
     navigator.geolocation.getCurrentPosition(
@@ -269,9 +292,9 @@ export function LocationSelector({
       },
       (error) => {
         setLoading(false);
-        let errText = "Gagal mengambil posisi GPS. Silakan pilih titik di peta atau ketik nama daerah Anda.";
+        let errText = "Gagal mengambil posisi GPS. Silakan gunakan titik di peta.";
         if (error.code === error.PERMISSION_DENIED) {
-          errText = "Izin lokasi ditolak. Silakan gunakan titik di peta atau ketik nama daerah Anda.";
+          errText = "Izin lokasi ditolak. Silakan pilih titik di peta atau ketik nama daerah.";
         }
         setStatusMsg({ type: "error", text: errText });
       },
@@ -280,8 +303,9 @@ export function LocationSelector({
   };
 
   const handleSaveModal = () => {
-    if (tempLocationInput.trim()) {
-      onLocationChange(tempLocationInput.trim());
+    const target = sanitizeLocationLabel(tempLocationInput.trim());
+    if (target) {
+      onLocationChange(target);
       setIsModalOpen(false);
     }
   };
@@ -295,15 +319,15 @@ export function LocationSelector({
           <button
             type="button"
             onClick={() => {
-              setTempLocationInput(locationLabel);
+              setTempLocationInput(cleanLabel);
               setStatusMsg(null);
               setIsModalOpen(true);
             }}
             className="group inline-flex items-center gap-2 bg-ocean-800 hover:bg-ocean-700 text-white px-3.5 py-1.5 rounded-xl border border-sky-400/40 text-xs font-semibold shadow-xs transition-all cursor-pointer"
           >
             <MapPin className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-            <span className="max-w-[220px] sm:max-w-[340px] truncate text-white">
-              {locationLabel || "Purwokerto, Jawa Tengah"}
+            <span className="max-w-[200px] sm:max-w-[340px] truncate text-white font-medium">
+              {cleanLabel}
             </span>
             <span className="text-[11px] font-bold text-sky-300 group-hover:text-white underline ml-1">
               Ubah Lokasi
@@ -311,23 +335,23 @@ export function LocationSelector({
           </button>
         </div>
 
-        {/* ELEGANT MODAL DIALOG FOR LOCATION SELECTION */}
+        {/* ELEGANT & FULLY RESPONSIVE MODAL DIALOG FOR LOCATION SELECTION */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 bg-ink-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white text-ink-900 w-full max-w-lg rounded-2xl border-2 border-ocean-900 shadow-2xl overflow-hidden space-y-0 animate-in fade-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-50 bg-ink-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="bg-white text-ink-900 w-full max-w-md sm:max-w-lg max-h-[90vh] flex flex-col rounded-2xl border border-ocean-900/20 shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
               
-              {/* Modal Header */}
-              <div className="bg-ocean-900 text-white px-6 py-4 flex items-center justify-between">
+              {/* Modal Header (Fixed top) */}
+              <div className="bg-ocean-900 text-white px-5 py-3.5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-sky-400 text-ink-900 flex items-center justify-center font-bold">
-                    <MapPin className="w-4.5 h-4.5" />
+                  <div className="w-7 h-7 rounded-lg bg-sky-400 text-ink-900 flex items-center justify-center font-bold shrink-0">
+                    <MapPin className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-base text-white">
+                    <h3 className="font-extrabold text-sm sm:text-base text-white leading-tight">
                       Pilih Lokasi Acuan Pembeli
                     </h3>
-                    <p className="text-[11px] text-sky-200">
-                      Gunakan nama daerah (Desa, Kecamatan, Kabupaten, atau Titik Peta)
+                    <p className="text-[10px] text-sky-200">
+                      Gunakan Titik Peta, GPS, atau Nama Daerah
                     </p>
                   </div>
                 </div>
@@ -340,38 +364,38 @@ export function LocationSelector({
                 </button>
               </div>
 
-              {/* Mode Tabs: GPS / Interactive Map / Search */}
-              <div className="flex border-b border-ink-200 bg-sky-50 px-4 pt-2 gap-2 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("gps")}
-                  className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
-                    activeTab === "gps"
-                      ? "border-ocean-900 text-ocean-900"
-                      : "border-transparent text-ink-600 hover:text-ink-900"
-                  }`}
-                >
-                  <Navigation className="w-3.5 h-3.5 text-sky-500 fill-sky-500" />
-                  <span>1. GPS Otomatis</span>
-                </button>
-
+              {/* Mode Tabs (Fixed top) */}
+              <div className="flex border-b border-ink-200 bg-sky-50 px-3 pt-2 gap-1 text-xs font-bold shrink-0 overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setActiveTab("map")}
-                  className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                  className={`pb-2 px-3 border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
                     activeTab === "map"
                       ? "border-ocean-900 text-ocean-900"
                       : "border-transparent text-ink-600 hover:text-ink-900"
                   }`}
                 >
                   <MapIcon className="w-3.5 h-3.5 text-danger-600" />
-                  <span>2. Titik di Peta (Map)</span>
+                  <span>1. Titik di Peta (Map)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("gps")}
+                  className={`pb-2 px-3 border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
+                    activeTab === "gps"
+                      ? "border-ocean-900 text-ocean-900"
+                      : "border-transparent text-ink-600 hover:text-ink-900"
+                  }`}
+                >
+                  <Navigation className="w-3.5 h-3.5 text-sky-500 fill-sky-500" />
+                  <span>2. GPS Otomatis</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab("search")}
-                  className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                  className={`pb-2 px-3 border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
                     activeTab === "search"
                       ? "border-ocean-900 text-ocean-900"
                       : "border-transparent text-ink-600 hover:text-ink-900"
@@ -382,18 +406,31 @@ export function LocationSelector({
                 </button>
               </div>
 
-              {/* Modal Content Body */}
-              <div className="p-6 space-y-5">
+              {/* Modal Content Body (Scrollable) */}
+              <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
                 
-                {/* TAB 1: GPS Auto Detect */}
+                {/* TAB 1: Interactive Map Point Picker */}
+                {activeTab === "map" && (
+                  <MapPinPicker
+                    initialLat={-7.4243}
+                    initialLng={109.2344}
+                    onPinSelect={(areaName, lat, lng) => {
+                      onLocationChange(areaName, lat, lng);
+                      setTempLocationInput(areaName);
+                      setIsModalOpen(false);
+                    }}
+                  />
+                )}
+
+                {/* TAB 2: GPS Auto Detect */}
                 {activeTab === "gps" && (
-                  <div className="space-y-4">
+                  <div className="space-y-4 py-2">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleDetectGPS}
                       disabled={loading}
-                      className="w-full h-13 bg-sky-50 hover:bg-sky-100 border-2 border-ocean-900 text-ocean-900 font-extrabold text-sm gap-2 rounded-xl"
+                      className="w-full h-12 bg-sky-50 hover:bg-sky-100 border-2 border-ocean-900 text-ocean-900 font-extrabold text-xs sm:text-sm gap-2 rounded-xl"
                     >
                       {loading ? (
                         <>
@@ -429,19 +466,6 @@ export function LocationSelector({
                   </div>
                 )}
 
-                {/* TAB 2: Interactive Map Point Picker */}
-                {activeTab === "map" && (
-                  <MapPinPicker
-                    initialLat={-7.4243}
-                    initialLng={109.2344}
-                    onPinSelect={(areaName, lat, lng) => {
-                      onLocationChange(areaName, lat, lng);
-                      setTempLocationInput(areaName);
-                      setIsModalOpen(false);
-                    }}
-                  />
-                )}
-
                 {/* TAB 3: Search Input Manual */}
                 {activeTab === "search" && (
                   <div className="space-y-4">
@@ -453,14 +477,14 @@ export function LocationSelector({
                         type="text"
                         value={tempLocationInput}
                         onChange={(e) => setTempLocationInput(e.target.value)}
-                        placeholder="contoh: Kecamatan Purwokerto Timur, Banyumas"
-                        className="block w-full pl-10 pr-4 h-12 rounded-xl border-2 border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 text-sm font-semibold outline-none"
+                        placeholder="contoh: Purwokerto Lor, Banyumas, Jawa Tengah"
+                        className="block w-full pl-10 pr-4 h-11 rounded-xl border-2 border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 text-xs sm:text-sm font-semibold outline-none"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <span className="text-xs font-bold text-ink-700 block">
-                        Pilih Cepat Daerah Pesisir Utama:
+                        Pilih Cepat Daerah Utama:
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {INDONESIAN_REGIONS_GEO_LOOKUP.map((hub) => (
@@ -488,20 +512,20 @@ export function LocationSelector({
 
               </div>
 
-              {/* Modal Footer Actions */}
-              <div className="bg-ink-100 px-6 py-4 flex items-center justify-end gap-3 border-t border-ink-200">
+              {/* Modal Footer Actions (Fixed bottom) */}
+              <div className="bg-ink-100 px-5 py-3 flex items-center justify-end gap-2.5 border-t border-ink-200 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setIsModalOpen(false)}
-                  className="h-10 px-4 text-ink-900 border-ink-300 font-bold text-xs"
+                  className="h-9 px-3.5 text-ink-900 border-ink-300 font-bold text-xs"
                 >
                   Batal
                 </Button>
                 <Button
                   type="button"
                   onClick={handleSaveModal}
-                  className="h-10 px-6 bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-xs rounded-xl shadow-xs"
+                  className="h-9 px-5 bg-ocean-900 hover:bg-ocean-700 text-white font-extrabold text-xs rounded-xl shadow-xs"
                 >
                   Simpan Lokasi Ini
                 </Button>
@@ -526,19 +550,6 @@ export function LocationSelector({
       <div className="flex border-b border-ink-200 pb-2 gap-2 text-xs font-bold">
         <button
           type="button"
-          onClick={() => setActiveTab("gps")}
-          className={`pb-1 px-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
-            activeTab === "gps"
-              ? "border-ocean-900 text-ocean-900"
-              : "border-transparent text-ink-600 hover:text-ink-900"
-          }`}
-        >
-          <Navigation className="w-3.5 h-3.5 text-sky-500 fill-sky-500" />
-          <span>GPS Otomatis</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab("map")}
           className={`pb-1 px-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
             activeTab === "map"
@@ -548,6 +559,19 @@ export function LocationSelector({
         >
           <MapIcon className="w-3.5 h-3.5 text-danger-600" />
           <span>Titik di Peta (Maps)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("gps")}
+          className={`pb-1 px-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
+            activeTab === "gps"
+              ? "border-ocean-900 text-ocean-900"
+              : "border-transparent text-ink-600 hover:text-ink-900"
+          }`}
+        >
+          <Navigation className="w-3.5 h-3.5 text-sky-500 fill-sky-500" />
+          <span>GPS Otomatis</span>
         </button>
 
         <button
@@ -563,6 +587,20 @@ export function LocationSelector({
           <span>Ketik Manual</span>
         </button>
       </div>
+
+      {activeTab === "map" && (
+        <MapPinPicker
+          initialLat={-7.4243}
+          initialLng={109.2344}
+          onPinSelect={(areaName, lat, lng) => {
+            onLocationChange(areaName, lat, lng);
+            setStatusMsg({
+              type: "success",
+              text: `Titik peta terpilih: ${areaName}`,
+            });
+          }}
+        />
+      )}
 
       {activeTab === "gps" && (
         <div className="space-y-3">
@@ -607,20 +645,6 @@ export function LocationSelector({
         </div>
       )}
 
-      {activeTab === "map" && (
-        <MapPinPicker
-          initialLat={-7.4243}
-          initialLng={109.2344}
-          onPinSelect={(areaName, lat, lng) => {
-            onLocationChange(areaName, lat, lng);
-            setStatusMsg({
-              type: "success",
-              text: `Titik peta terpilih: ${areaName}`,
-            });
-          }}
-        />
-      )}
-
       {activeTab === "search" && (
         <div className="space-y-3">
           <div className="relative">
@@ -629,12 +653,12 @@ export function LocationSelector({
             </div>
             <input
               type="text"
-              value={locationLabel}
+              value={cleanLabel}
               onChange={(e) => onLocationChange(e.target.value)}
               placeholder={
                 isSupplierForm
                   ? "contoh: Purwokerto, Jawa Tengah"
-                  : "contoh: Kecamatan Purwokerto Selatan, Banyumas"
+                  : "contoh: Purwokerto Lor, Banyumas, Jawa Tengah"
               }
               className="block w-full pl-11 pr-4 rounded-xl border-2 border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 focus:border-ocean-900 outline-none text-sm h-12 font-semibold"
               required
@@ -648,7 +672,7 @@ export function LocationSelector({
                 type="button"
                 onClick={() => onLocationChange(hub.name, hub.lat, hub.lng)}
                 className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
-                  locationLabel === hub.name
+                  cleanLabel === hub.name
                     ? "bg-ocean-900 text-white border-ocean-900"
                     : "bg-ink-100 hover:bg-sky-100 text-ink-900 border-ink-200"
                 }`}
