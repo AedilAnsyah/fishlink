@@ -16,13 +16,18 @@ const TEST_ACCOUNTS = {
     password: "buyer123",
     name: "Bambang Hartono",
     business: "Restoran Seafood Bahari, Senopati",
+    location: "Senopati, Jakarta Selatan",
+    phone: "081298765432",
     role: "buyer" as const,
   },
   supplier: {
     email: "supplier@fishlink.id",
     password: "supplier123",
     name: "Pak Udung",
-    business: "Nelayan Pancing, Purwokerto",
+    business: "Tangkapan Pak Udung",
+    location: "Depo Seafood Purwokerto, Jawa Tengah",
+    phone: "081234567890",
+    supplierType: "nelayan_perorangan",
     role: "supplier" as const,
   },
 };
@@ -70,6 +75,11 @@ function LoginForm() {
       document.cookie = `fishlink_mock_role=${matchedAccount.role}; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `fishlink_mock_name=${encodeURIComponent(matchedAccount.name)}; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `fishlink_mock_business=${encodeURIComponent(matchedAccount.business)}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `fishlink_mock_location=${encodeURIComponent(matchedAccount.location)}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `fishlink_mock_phone=${encodeURIComponent(matchedAccount.phone)}; path=/; max-age=86400; SameSite=Lax`;
+      if ("supplierType" in matchedAccount) {
+        document.cookie = `fishlink_mock_supplier_type=${encodeURIComponent((matchedAccount as any).supplierType)}; path=/; max-age=86400; SameSite=Lax`;
+      }
 
       await new Promise((r) => setTimeout(r, 600));
       setLoading(false);
@@ -99,9 +109,6 @@ function LoginForm() {
         password,
       });
 
-      // If phone-to-email login failed, maybe the supplier registered with a real email
-      // In that case the user might be typing their phone but their account uses real email
-      // So we don't need a second attempt — just show error
       if (error) {
         if (isPhone(identifier)) {
           setErrorMessage("Nomor HP atau kata sandi salah. Pastikan Anda sudah terdaftar atau coba login dengan email.");
@@ -122,29 +129,38 @@ function LoginForm() {
 
         const role = profile?.role || "buyer";
         const fullName = profile?.full_name || data.user.user_metadata?.full_name || "Pengguna";
+        const phone = profile?.phone || "";
 
-        // Fetch business name based on role
         let businessName = "";
+        let locationLabel = "";
+        let supplierType = "";
+
         if (role === "buyer") {
           const { data: buyerProfile } = await supabase
             .from("buyer_profiles")
-            .select("business_name")
+            .select("business_name, address")
             .eq("profile_id", data.user.id)
             .single();
           businessName = buyerProfile?.business_name || "Usaha Pembeli";
+          locationLabel = buyerProfile?.address || "";
         } else if (role === "supplier") {
           const { data: supplierProfile } = await supabase
             .from("suppliers")
-            .select("business_name")
+            .select("business_name, address_label, supplier_type")
             .eq("profile_id", data.user.id)
             .single();
-          businessName = supplierProfile?.business_name || "Mitra Supplier";
+          businessName = supplierProfile?.business_name || `Mitra ${fullName}`;
+          locationLabel = supplierProfile?.address_label || "";
+          supplierType = supplierProfile?.supplier_type || "nelayan_perorangan";
         }
 
         // Set cookies for the app to recognize the logged-in user
         document.cookie = `fishlink_mock_role=${role}; path=/; max-age=86400; SameSite=Lax`;
         document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
         document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
+        if (locationLabel) document.cookie = `fishlink_mock_location=${encodeURIComponent(locationLabel)}; path=/; max-age=86400; SameSite=Lax`;
+        if (phone) document.cookie = `fishlink_mock_phone=${encodeURIComponent(phone)}; path=/; max-age=86400; SameSite=Lax`;
+        if (supplierType) document.cookie = `fishlink_mock_supplier_type=${encodeURIComponent(supplierType)}; path=/; max-age=86400; SameSite=Lax`;
 
         setLoading(false);
 

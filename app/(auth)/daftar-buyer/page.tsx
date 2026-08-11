@@ -90,6 +90,8 @@ export default function DaftarBuyerPage() {
     document.cookie = `fishlink_mock_role=buyer; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_business=${encodeURIComponent(businessName)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_location=${encodeURIComponent(locationLabel)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_phone=${encodeURIComponent(phone)}; path=/; max-age=86400; SameSite=Lax`;
 
     setLoading(false);
     router.push("/dashboard");

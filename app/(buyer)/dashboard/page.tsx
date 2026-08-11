@@ -41,11 +41,12 @@ export default function BuyerDashboardPage() {
     if (cookies.fishlink_mock_name) setUserName(cookies.fishlink_mock_name);
     if (cookies.fishlink_mock_business) setUserBusiness(cookies.fishlink_mock_business);
 
-    // If demo test account, load SEED_ORDERS
-    if (cookies.fishlink_mock_name === "Bambang Hartono" || !cookies.fishlink_mock_name) {
+    // If demo test account "Bambang Hartono", load SEED_ORDERS
+    if (cookies.fishlink_mock_name === "Bambang Hartono") {
       setOrders(SEED_ORDERS);
       setUserName("Bambang Hartono");
       setUserBusiness("Restoran Seafood Bahari");
+      setLoadingOrders(false);
     }
   }, []);
 
@@ -299,13 +300,13 @@ export default function BuyerDashboardPage() {
                 <div className="space-y-2.5 text-xs text-ink-700">
                   <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 space-y-1">
                     <p className="font-bold text-ink-900">🚚 Pesanan #o1111111 Dalam Pengiriman</p>
-                    <p className="text-[11px] text-ink-700">Armada pendingin sedang menuju lokasi Senopati (Suhu -1.8°C).</p>
+                    <p className="text-[11px] text-ink-700">Armada pendingin sedang menuju lokasi tujuan (Suhu -1.8°C).</p>
                     <span className="text-[10px] text-ink-400 block">1 jam lalu</span>
                   </div>
 
                   <div className="p-3 rounded-xl bg-off-white border border-ink-200 space-y-1">
                     <p className="font-bold text-ink-900">✅ Pesanan #o2222222 Diterima</p>
-                    <p className="text-[11px] text-ink-700">Silakan beri ulasan rating kesegaran supplier Pak Udung.</p>
+                    <p className="text-[11px] text-ink-700">Silakan beri ulasan rating kesegaran pasokan hasil laut.</p>
                     <span className="text-[10px] text-ink-400 block">Kemarin</span>
                   </div>
                 </div>

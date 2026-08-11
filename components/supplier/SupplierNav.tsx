@@ -22,6 +22,9 @@ export function SupplierNav() {
     document.cookie = "fishlink_mock_role=; path=/; max-age=0";
     document.cookie = "fishlink_mock_name=; path=/; max-age=0";
     document.cookie = "fishlink_mock_business=; path=/; max-age=0";
+    document.cookie = "fishlink_mock_location=; path=/; max-age=0";
+    document.cookie = "fishlink_mock_phone=; path=/; max-age=0";
+    document.cookie = "fishlink_mock_supplier_type=; path=/; max-age=0";
 
     try {
       const supabase = createClient();

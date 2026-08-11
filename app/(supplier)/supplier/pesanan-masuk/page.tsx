@@ -40,7 +40,7 @@ export default function PesananMasukPage() {
       return acc;
     }, {} as Record<string, string>);
 
-    if (cookies.fishlink_mock_name === "Pak Udung" || !cookies.fishlink_mock_name) {
+    if (cookies.fishlink_mock_name === "Pak Udung") {
       setOrders(SEED_SUPPLIER_ORDERS);
     } else {
       async function loadSupplierOrders() {

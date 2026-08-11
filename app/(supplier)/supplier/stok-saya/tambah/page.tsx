@@ -110,10 +110,22 @@ export default function TambahStokPage() {
         }
       }
 
-      // Insert product row
+      // Insert product row for the current authenticated supplier
       const supabase = createClient();
+      const { data: userData } = await supabase.auth.getUser();
+      let targetSupplierId = "s1111111-1111-1111-1111-111111111111"; // Fallback demo ID
+
+      if (userData?.user) {
+        const { data: supp } = await supabase
+          .from("suppliers")
+          .select("id")
+          .eq("profile_id", userData.user.id)
+          .single();
+        if (supp?.id) targetSupplierId = supp.id;
+      }
+
       await supabase.from("products").insert({
-        supplier_id: "s1111111-1111-1111-1111-111111111111",
+        supplier_id: targetSupplierId,
         fish_name: fishName,
         price_per_kg: pricePerKg,
         stock_kg: stockKg,
@@ -123,7 +135,7 @@ export default function TambahStokPage() {
         is_active: true,
       });
     } catch {
-      // Ignore if offline
+      // Ignore if offline / fallback
     }
 
     setTimeout(() => {

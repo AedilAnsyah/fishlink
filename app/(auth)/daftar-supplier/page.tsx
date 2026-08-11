@@ -97,6 +97,9 @@ export default function DaftarSupplierPage() {
     document.cookie = `fishlink_mock_role=supplier; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_name=${encodeURIComponent(fullName)}; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `fishlink_mock_business=${encodeURIComponent(effectiveBusiness)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_location=${encodeURIComponent(locationLabel)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_phone=${encodeURIComponent(phone)}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `fishlink_mock_supplier_type=${encodeURIComponent(supplierType)}; path=/; max-age=86400; SameSite=Lax`;
 
     setLoading(false);
     router.push("/supplier/beranda");

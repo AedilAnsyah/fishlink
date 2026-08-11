@@ -22,7 +22,7 @@ export default function StokSayaPage() {
       return acc;
     }, {} as Record<string, string>);
 
-    if (cookies.fishlink_mock_name === "Pak Udung" || !cookies.fishlink_mock_name) {
+    if (cookies.fishlink_mock_name === "Pak Udung") {
       setProducts(SEED_PRODUCTS.filter((p) => p.supplier_id === "s1111111-1111-1111-1111-111111111111"));
       setLoading(false);
     } else {
